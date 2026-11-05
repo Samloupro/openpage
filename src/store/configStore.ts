@@ -28,6 +28,7 @@ interface ConfigState {
   undoStack: UndoEntry[]
   redoStack: UndoEntry[]
   setConfig: (config: SiteConfig) => void
+  applyConfig: (config: SiteConfig, label: string) => void
   setActivePage: (id: string) => void
   getActivePageBlocks: () => BlockConfig[]
   updateBlock: (id: string, updates: Partial<BlockConfig>) => void
@@ -163,6 +164,21 @@ export const useConfigStore = create<ConfigState>()(
         const pages = ensurePages(config)
         set({ config: { ...config, pages }, activePageId: pages[0]?.id ?? 'page-home', undoStack: [], redoStack: [] })
       },
+
+      /**
+       * Same as setConfig, but keeps the undo history: an AI edit is one more
+       * step in the stack, not a new document.
+       */
+      applyConfig: (config, label) =>
+        set((state) => {
+          const pages = ensurePages(config)
+          const stillThere = pages.some((page) => page.id === state.activePageId)
+          return {
+            ...pushUndo(state, label),
+            config: { ...config, pages },
+            activePageId: stillThere ? state.activePageId : (pages[0]?.id ?? 'page-home'),
+          }
+        }),
 
       setActivePage: (id) => set({ activePageId: id }),
 

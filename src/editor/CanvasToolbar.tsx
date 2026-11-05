@@ -20,6 +20,7 @@ import { useConfigStore } from '@/store/configStore'
 import { useProjectsStore } from '@/store/projectsStore'
 import type { PageConfig } from '@/blocks/types'
 import { exportToHTML, downloadHTML } from '@/lib/export-html'
+import { AiEditPopover } from './AiEditPopover'
 
 const viewports: { value: Viewport; icon: typeof Monitor; label: string }[] = [
   { value: 'desktop', icon: Monitor, label: 'Desktop' },
@@ -340,6 +341,10 @@ export function CanvasToolbar() {
         >
           <HelpCircle size={14} />
         </button>
+
+        <div className="w-px h-5 bg-border-default mx-1" />
+
+        <AiEditPopover />
 
         <div className="w-px h-5 bg-border-default mx-1" />
 

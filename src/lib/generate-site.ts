@@ -203,7 +203,7 @@ function coerceString(value: unknown): string | null {
   return null
 }
 
-function normalizeProps(type: string, props: Record<string, unknown>): Record<string, unknown> {
+export function normalizeProps(type: string, props: Record<string, unknown>): Record<string, unknown> {
   const defaults = DEFAULT_PROPS_MAP[type] as Record<string, unknown> | undefined
   if (!defaults) return props
 

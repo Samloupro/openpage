@@ -185,9 +185,10 @@ async function assertOk(res: Response, label: string): Promise<Response> {
 async function callGemini(
   config: LlmConfig,
   model: string,
-  prompt: string,
+  userMessage: string,
   systemPrompt: string,
   signal: AbortSignal,
+  temperature: number,
 ): Promise<string> {
   const url = `${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(config.apiKey ?? '')}`
 
@@ -199,10 +200,8 @@ async function callGemini(
       signal,
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [
-          { role: 'user', parts: [{ text: `Generate a website configuration for: ${prompt}` }] },
-        ],
-        generationConfig: { responseMimeType: 'application/json', temperature: 0.8 },
+        contents: [{ role: 'user', parts: [{ text: userMessage }] }],
+        generationConfig: { responseMimeType: 'application/json', temperature },
       }),
     },
     'Gemini',
@@ -217,54 +216,88 @@ async function callGemini(
     .map((part) => part.text ?? '')
     .join('')
 
-  if (!text.trim()) throw new LlmError('empty_completion', 'Gemini returned an empty completion')
   return text
+}
+
+/**
+ * Anthropic models behind an OpenAI-compatible gateway (OpenRouter, OmniRoute)
+ * honour an explicit cache breakpoint on the system block. Every other family
+ * caches prefixes automatically, so sending the marker would only add noise.
+ */
+function systemMessage(systemPrompt: string, model: string): Record<string, unknown> {
+  if (/anthropic|claude/i.test(model)) {
+    return {
+      role: 'system',
+      content: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+    }
+  }
+  return { role: 'system', content: systemPrompt }
 }
 
 async function callOpenAi(
   config: LlmConfig,
   model: string,
-  prompt: string,
+  userMessage: string,
   systemPrompt: string,
   signal: AbortSignal,
+  temperature: number,
+  jsonSchema?: JsonSchemaSpec,
 ): Promise<string> {
   const url = `${config.baseUrl}/chat/completions`
   const headers = { 'content-type': 'application/json', ...authHeader(config) }
 
-  const payloadFor = (jsonMode: boolean) =>
+  // Three-step ladder: a strict schema when we have one, then plain JSON mode,
+  // then nothing. Gateways differ in what they accept, and a 400 here is a
+  // configuration mismatch, not a model failure.
+  const responseFormat = (mode: 'schema' | 'json' | 'none') => {
+    if (mode === 'schema' && jsonSchema) {
+      return {
+        response_format: {
+          type: 'json_schema',
+          json_schema: { name: jsonSchema.name, strict: false, schema: jsonSchema.schema },
+        },
+      }
+    }
+    if (mode === 'json') return { response_format: { type: 'json_object' } }
+    return {}
+  }
+
+  const payloadFor = (mode: 'schema' | 'json' | 'none') =>
     JSON.stringify({
       model,
-      temperature: 0.8,
-      ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Generate a website configuration for: ${prompt}` },
-      ],
+      temperature,
+      ...responseFormat(mode),
+      messages: [systemMessage(systemPrompt, model), { role: 'user', content: userMessage }],
     })
 
-  const send = (jsonMode: boolean) =>
-    request(url, { method: 'POST', headers, signal, body: payloadFor(jsonMode) }, 'LLM')
+  const send = (mode: 'schema' | 'json' | 'none') =>
+    request(url, { method: 'POST', headers, signal, body: payloadFor(mode) }, 'LLM')
 
-  // Not every OpenAI-compatible gateway accepts response_format: retry once
-  // without it before giving up.
-  let res = await send(true)
-  if (res.status === 400 || res.status === 422) res = await send(false)
+  let res = await send(jsonSchema ? 'schema' : 'json')
+  if (res.status === 400 || res.status === 422) res = await send('json')
+  if (res.status === 400 || res.status === 422) res = await send('none')
 
   await assertOk(res, 'LLM')
 
   const payload = (await res.json()) as { choices?: { message?: { content?: string } }[] }
-  const text = payload.choices?.[0]?.message?.content ?? ''
+  return payload.choices?.[0]?.message?.content ?? ''
+}
 
-  if (!text.trim()) throw new LlmError('empty_completion', 'The model returned an empty completion')
-  return text
+export interface JsonSchemaSpec {
+  name: string
+  schema: Record<string, unknown>
 }
 
 export interface GenerateJsonOptions {
   config: LlmConfig
-  prompt: string
+  /** The user turn, verbatim. Callers own the wording. */
+  userMessage: string
   systemPrompt: string
   model?: string
   timeoutMs?: number
+  temperature?: number
+  /** When set, the provider is asked to constrain the answer to this shape. */
+  jsonSchema?: JsonSchemaSpec
 }
 
 export interface GenerateJsonResult {
@@ -274,14 +307,24 @@ export interface GenerateJsonResult {
 }
 
 export async function generateJson(options: GenerateJsonOptions): Promise<GenerateJsonResult> {
-  const { config, prompt, systemPrompt } = options
+  const { config, userMessage, systemPrompt, jsonSchema } = options
   const model = options.model?.trim() || config.model
+  const temperature = options.temperature ?? 0.8
   const signal = AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
 
-  const text =
+  const call = () =>
     config.provider === 'gemini'
-      ? await callGemini(config, model, prompt, systemPrompt, signal)
-      : await callOpenAi(config, model, prompt, systemPrompt, signal)
+      ? callGemini(config, model, userMessage, systemPrompt, signal, temperature)
+      : callOpenAi(config, model, userMessage, systemPrompt, signal, temperature, jsonSchema)
+
+  // A reasoning model occasionally spends its whole budget on reasoning and
+  // returns an empty message. One more attempt costs a second; surfacing
+  // "empty completion" to the user costs a retry by hand.
+  let text = await call()
+  if (!text.trim()) text = await call()
+  if (!text.trim()) {
+    throw new LlmError('empty_completion', 'The model returned an empty completion')
+  }
 
   return { data: parseJsonLoose(text), provider: config.provider, model }
 }

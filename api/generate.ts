@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { GENERATION_PROMPT } from '../src/lib/generation-prompt'
 import { LlmError, generateJson, listModels, publicStatus, readLlmConfig } from '../server/llm'
+import { SITE_CONFIG_SCHEMA } from '../server/schemas'
 
 /**
  * Vercel entry point. Same contract as the Vite middleware in server/api.ts:
@@ -57,10 +58,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : undefined
     const result = await generateJson({
       config,
-      prompt,
+      userMessage: `Generate a website configuration for: ${prompt}`,
       systemPrompt: GENERATION_PROMPT,
       model,
       timeoutMs: 60_000,
+      jsonSchema: SITE_CONFIG_SCHEMA,
     })
     return res.status(200).json({ config: result.data, provider: result.provider, model: result.model })
   } catch (error) {

@@ -13,7 +13,9 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { GENERATION_PROMPT } from '../src/lib/generation-prompt'
+import { EDIT_PROMPT, buildEditUserMessage } from './edit-prompt'
 import { LlmError, generateJson, listModels, publicStatus, readLlmConfig } from './llm'
+import { EDIT_OPS_SCHEMA, SITE_CONFIG_SCHEMA } from './schemas'
 
 type Next = (err?: unknown) => void
 
@@ -78,6 +80,14 @@ function isSiteConfigShaped(value: unknown): boolean {
 }
 
 const GENERATION_TIMEOUT_MS = 120_000
+const EDIT_TIMEOUT_MS = 60_000
+const MAX_INSTRUCTION_CHARS = 2_000
+const MAX_OUTLINE_BYTES = 48 * 1024
+
+function isEditOpsShaped(value: unknown): value is { ops: unknown[]; summary?: string } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  return Array.isArray((value as Record<string, unknown>).ops)
+}
 
 export function createOpenPageApi() {
   return async function openPageApi(
@@ -86,7 +96,7 @@ export function createOpenPageApi() {
     next: Next,
   ): Promise<void> {
     const path = (req.url ?? '').split('?')[0]
-    if (path !== '/api/llm' && path !== '/api/generate') return next()
+    if (path !== '/api/llm' && path !== '/api/generate' && path !== '/api/edit') return next()
 
     try {
       if (path === '/api/llm') {
@@ -100,13 +110,11 @@ export function createOpenPageApi() {
         return sendJson(res, 405, { error: 'method_not_allowed', message: 'Use POST.' })
       }
 
-      const body = (await readJsonBody(req)) as { prompt?: unknown; model?: unknown }
-      const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : ''
-      if (!prompt) {
-        return sendJson(res, 400, {
-          error: 'prompt_required',
-          message: 'Body must contain a non-empty "prompt".',
-        })
+      const body = (await readJsonBody(req)) as {
+        prompt?: unknown
+        model?: unknown
+        outline?: unknown
+        instruction?: unknown
       }
 
       const config = readLlmConfig()
@@ -120,19 +128,87 @@ export function createOpenPageApi() {
 
       const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : undefined
 
+      if (path === '/api/edit') {
+        const instruction =
+          typeof body.instruction === 'string' ? body.instruction.trim() : ''
+        if (!instruction) {
+          return sendJson(res, 400, {
+            error: 'instruction_required',
+            message: 'Body must contain a non-empty "instruction".',
+          })
+        }
+        if (instruction.length > MAX_INSTRUCTION_CHARS) {
+          return sendJson(res, 400, {
+            error: 'instruction_too_long',
+            message: `Keep the instruction under ${MAX_INSTRUCTION_CHARS} characters.`,
+          })
+        }
+        if (!body.outline || typeof body.outline !== 'object') {
+          return sendJson(res, 400, {
+            error: 'outline_required',
+            message: 'Body must contain the site "outline" object.',
+          })
+        }
+
+        // The endpoint is public: an unbounded outline is an unbounded bill.
+        const outlineSize = Buffer.byteLength(JSON.stringify(body.outline), 'utf8')
+        if (outlineSize > MAX_OUTLINE_BYTES) {
+          return sendJson(res, 413, {
+            error: 'outline_too_large',
+            message: `The outline is ${outlineSize} bytes; the limit is ${MAX_OUTLINE_BYTES}.`,
+          })
+        }
+
+        // Low temperature: an edit is a lookup-and-replace, not a creative act.
+        const result = await generateJson({
+          config,
+          userMessage: buildEditUserMessage(body.outline, instruction),
+          systemPrompt: EDIT_PROMPT,
+          model,
+          temperature: 0.2,
+          timeoutMs: EDIT_TIMEOUT_MS,
+          jsonSchema: EDIT_OPS_SCHEMA,
+        })
+
+        if (!isEditOpsShaped(result.data)) {
+          return sendJson(res, 502, {
+            error: 'invalid_edit',
+            message: 'The model did not return an operation list. Try rephrasing the instruction.',
+          })
+        }
+
+        return sendJson(res, 200, {
+          ops: result.data.ops,
+          summary: typeof result.data.summary === 'string' ? result.data.summary : '',
+          provider: result.provider,
+          model: result.model,
+        })
+      }
+
+      const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : ''
+      if (!prompt) {
+        return sendJson(res, 400, {
+          error: 'prompt_required',
+          message: 'Body must contain a non-empty "prompt".',
+        })
+      }
+
+      const userMessage = `Generate a website configuration for: ${prompt}`
+
       const attempt = () =>
         generateJson({
           config,
-          prompt,
+          userMessage,
           systemPrompt: GENERATION_PROMPT,
           model,
           timeoutMs: GENERATION_TIMEOUT_MS,
+          jsonSchema: SITE_CONFIG_SCHEMA,
         })
 
       let result = await attempt()
       if (!isSiteConfigShaped(result.data)) {
-        // One retry: a model that answered with an unrelated object usually
-        // gets it right on the second try.
+        // One retry: the schema rejects most malformed answers upstream, but a
+        // gateway that silently drops response_format can still let one through.
         result = await attempt()
       }
 
