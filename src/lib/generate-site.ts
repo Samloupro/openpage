@@ -160,8 +160,79 @@ function validateBlock(raw: Record<string, unknown>, index: number): BlockConfig
     id: typeof raw.id === 'string' && raw.id ? raw.id : `block-${type}-${index}-${Date.now()}`,
     type: type as BlockConfig['type'],
     variant,
-    props: props as Record<string, unknown>,
+    props: normalizeProps(type, props as Record<string, unknown>),
   }
+}
+
+/**
+ * Models routinely answer `links: [{ label, href }]` where the block expects
+ * `string[]`, or an object where it expects a string. Both crash the renderer
+ * with React error #31, so every prop is coerced back to the shape its default
+ * declares.
+ */
+function coerceStringList(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null
+
+  const out: string[] = []
+  for (const entry of value) {
+    if (typeof entry === 'string') {
+      if (entry.trim()) out.push(entry)
+      continue
+    }
+    if (entry && typeof entry === 'object') {
+      const record = entry as Record<string, unknown>
+      const label = record.label ?? record.text ?? record.name ?? record.title
+      if (typeof label === 'string' && label.trim()) out.push(label)
+    }
+  }
+
+  return out.length > 0 ? out : null
+}
+
+function coerceString(value: unknown): string | null {
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) {
+    const parts = value.filter((entry): entry is string => typeof entry === 'string')
+    return parts.length > 0 ? parts.join('\n\n') : null
+  }
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    const text = record.label ?? record.text ?? record.title ?? record.name ?? record.value
+    return typeof text === 'string' ? text : null
+  }
+  return null
+}
+
+function normalizeProps(type: string, props: Record<string, unknown>): Record<string, unknown> {
+  const defaults = DEFAULT_PROPS_MAP[type] as Record<string, unknown> | undefined
+  if (!defaults) return props
+
+  const next = { ...props }
+
+  for (const [key, fallback] of Object.entries(defaults)) {
+    if (typeof fallback === 'string') {
+      const coerced = coerceString(next[key])
+      if (coerced !== null) next[key] = coerced
+      else if (next[key] !== undefined) next[key] = fallback
+      continue
+    }
+
+    if (!Array.isArray(fallback) || fallback.length === 0) continue
+    if (!fallback.every((entry) => typeof entry === 'string')) continue
+    next[key] = coerceStringList(next[key]) ?? fallback
+  }
+
+  // pricing.tiers[].features is a nested string list the defaults do not cover.
+  if (type === 'pricing' && Array.isArray(next.tiers)) {
+    next.tiers = (next.tiers as unknown[]).map((tier) => {
+      if (!tier || typeof tier !== 'object') return tier
+      const record = { ...(tier as Record<string, unknown>) }
+      record.features = coerceStringList(record.features) ?? []
+      return record
+    })
+  }
+
+  return next
 }
 
 function validatePageBlocks(rawBlocks: unknown[]): BlockConfig[] {
