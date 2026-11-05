@@ -140,6 +140,22 @@ function validateTheme(raw: Record<string, unknown>): Partial<ThemeConfig> {
     theme.radiusLg = raw.radiusLg
   }
 
+  // Design levers. A model that answers `h1Size: 12` or `containerWidth: 4000`
+  // must not reach the renderer: the bounds are the range a real page can use.
+  const sizeKeys: [keyof ThemeConfig, number, number][] = [
+    ['h1Size', 32, 96],
+    ['h2Size', 20, 64],
+    ['sectionSpacing', 32, 160],
+    ['containerWidth', 960, 1600],
+    ['gutter', 16, 96],
+  ]
+  for (const [key, min, max] of sizeKeys) {
+    const value = raw[key]
+    if (typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max) {
+      ;(theme as Record<string, unknown>)[key] = Math.round(value)
+    }
+  }
+
   return theme
 }
 

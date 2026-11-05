@@ -228,6 +228,35 @@ textarea:focus-visible {
 @utility reveal-d7 { --reveal-delay: 480ms; }
 @utility reveal-d8 { --reveal-delay: 560ms; }
 
+/* Design levers — the same rules the export emits, scoped to the canvas.
+   Each one is inert until the theme sets the matching value, so an untouched
+   theme keeps the block's own hardcoded sizes. */
+[data-op-h1="on"] h1 {
+  font-size: var(--op-h1) !important;
+}
+[data-op-h2="on"] h2 {
+  font-size: var(--op-h2) !important;
+}
+[data-op-space="on"] section {
+  padding-top: var(--op-section-y) !important;
+  padding-bottom: var(--op-section-y) !important;
+}
+[data-op-container="on"] .max-w-5xl,
+[data-op-container="on"] .max-w-4xl {
+  max-width: var(--op-container) !important;
+}
+[data-op-container="on"] section {
+  max-width: var(--op-container) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+[data-op-gutter="on"] section,
+[data-op-gutter="on"] footer,
+[data-op-gutter="on"] nav {
+  padding-left: var(--op-gutter) !important;
+  padding-right: var(--op-gutter) !important;
+}
+
 /* Skip to content link - visible only on focus */
 .skip-to-content {
   position: fixed;

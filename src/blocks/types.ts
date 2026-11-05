@@ -66,6 +66,19 @@ export interface ThemeConfig {
   // Radius
   radius: number
   radiusLg: number
+  /**
+   * Design levers. Each one is optional and absent by default: when it is
+   * missing the block's own hardcoded value wins, so an existing site keeps
+   * its exact output until someone pulls the lever.
+   *
+   * Sizes are the desktop maximum in px; the renderer derives the fluid
+   * clamp, so a model never has to write CSS.
+   */
+  h1Size?: number
+  h2Size?: number
+  sectionSpacing?: number
+  containerWidth?: number
+  gutter?: number
 }
 
 export interface PageConfig {

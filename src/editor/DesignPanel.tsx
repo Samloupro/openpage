@@ -192,7 +192,7 @@ export function DesignPanel() {
       </div>
 
       {/* Radius */}
-      <div>
+      <div className="mb-4">
         <div className="text-[10px] font-semibold uppercase tracking-wider text-text-3 mb-2">Radius</div>
         <div className="grid grid-cols-2 gap-2">
           <div>
@@ -219,6 +219,80 @@ export function DesignPanel() {
           </div>
         </div>
       </div>
+
+      <ScaleSection />
+    </div>
+  )
+}
+
+/**
+ * The five design levers. Each one is opt-in: an empty field means the blocks
+ * keep their built-in value, and the placeholder shows what that value is.
+ */
+const SCALE_FIELDS = [
+  { key: 'h1Size' as const, label: 'H1', fallback: 48, min: 32, max: 96, unit: 'px' },
+  { key: 'h2Size' as const, label: 'H2', fallback: 30, min: 20, max: 64, unit: 'px' },
+  { key: 'sectionSpacing' as const, label: 'Section', fallback: 80, min: 32, max: 160, unit: 'px' },
+  { key: 'containerWidth' as const, label: 'Container', fallback: 1024, min: 960, max: 1600, unit: 'px' },
+  { key: 'gutter' as const, label: 'Gutter', fallback: 40, min: 16, max: 96, unit: 'px' },
+]
+
+function ScaleSection() {
+  const theme = useConfigStore((s) => s.config.theme)
+  const updateTheme = useConfigStore((s) => s.updateTheme)
+  const resolved = useMemo(() => resolveTheme(theme), [theme])
+  const [open, setOpen] = useState(false)
+
+  const active = SCALE_FIELDS.filter((f) => resolved[f.key] !== undefined).length
+
+  return (
+    <div className="border border-border-default rounded-lg overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-3 py-2 bg-bg-2 hover:bg-bg-3 transition-colors text-left"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-semibold">Scale</span>
+          <span className="text-[10px] text-text-3">
+            {active === 0 ? 'default' : `${active} set`}
+          </span>
+        </div>
+        <ChevronDown size={12} className={`text-text-3 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="px-3 py-2.5 space-y-2 bg-bg-1">
+          <p className="text-[10px] text-text-3 leading-relaxed">
+            Leave a field empty to keep the block's own value. Setting one overrides every block.
+          </p>
+          {SCALE_FIELDS.map((field) => (
+            <div key={field.key} className="flex items-center justify-between gap-2">
+              <label className="text-[10.5px] text-text-2">{field.label}</label>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min={field.min}
+                  max={field.max}
+                  placeholder={String(field.fallback)}
+                  value={resolved[field.key] ?? ''}
+                  onChange={(e) => {
+                    const raw = e.target.value
+                    if (raw === '') {
+                      updateTheme({ [field.key]: undefined })
+                      return
+                    }
+                    const value = Number(raw)
+                    if (Number.isFinite(value) && value >= field.min && value <= field.max) {
+                      updateTheme({ [field.key]: value })
+                    }
+                  }}
+                  className="w-[64px] px-1.5 py-1 rounded border border-border-default bg-bg-2 text-text-1 text-[10px] font-mono outline-none focus:border-green"
+                />
+                <span className="text-[9.5px] text-text-3 w-4">{field.unit}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,5 +1,5 @@
-import type { SiteConfig, BlockConfig } from '@/blocks/types'
-import { resolveTheme } from '@/lib/theme-presets'
+import type { SiteConfig, BlockConfig, ThemeConfig } from '@/blocks/types'
+import { resolveTheme, designScale, fluidSize, fluidGutter } from '@/lib/theme-presets'
 import { buildToneLayer } from '@/lib/section-tone'
 
 export interface ExportSiteSettings {
@@ -1331,6 +1331,57 @@ function renderBlockBody(block: BlockConfig): string {
 }
 
 // ---------------------------------------------------------------------------
+// Design levers
+// ---------------------------------------------------------------------------
+
+/**
+ * The three levers the theme can pull: heading sizes, section rhythm, and the
+ * width of the content column.
+ *
+ * Every rule is emitted only when the theme sets the matching value, so a site
+ * that never touched the levers keeps the exact output it had before. The
+ * `!important` is deliberate: the blocks carry Tailwind classes at (0,1,0) and
+ * a bare `h1` selector is (0,0,1), so without it the class would win.
+ */
+function buildScaleCss(theme: ThemeConfig): string {
+  const scale = designScale(theme)
+  const rules: string[] = []
+
+  if (scale.h1) {
+    rules.push(`h1 { font-size: var(--op-h1) !important; }`)
+  }
+  if (scale.h2) {
+    rules.push(`h2 { font-size: var(--op-h2) !important; }`)
+  }
+
+  if (scale.space) {
+    rules.push(
+      `section { padding-top: var(--op-section-y) !important; padding-bottom: var(--op-section-y) !important; }`,
+    )
+  }
+
+  if (scale.container) {
+    // The section itself is capped, not just its inner wrapper: several blocks
+    // (features grid, stats) have no max-width wrapper at all and would
+    // otherwise stretch to the full viewport. The tone wrapper sits outside the
+    // section, so a tinted band still bleeds edge to edge.
+    rules.push(
+      `section { max-width: var(--op-container) !important; margin-left: auto !important; margin-right: auto !important; }`,
+    )
+    // Only the two widest wrappers move. max-w-3xl and below are deliberate
+    // narrow text columns — a hero headline should not become 1420px wide.
+    rules.push(`.max-w-5xl, .max-w-4xl { max-width: var(--op-container) !important; }`)
+  }
+  if (scale.gutter) {
+    rules.push(
+      `section, footer, nav { padding-left: var(--op-gutter) !important; padding-right: var(--op-gutter) !important; }`,
+    )
+  }
+
+  return rules.join('\n    ')
+}
+
+// ---------------------------------------------------------------------------
 // Main export
 // ---------------------------------------------------------------------------
 
@@ -1344,6 +1395,7 @@ export function exportSiteToHTML(config: SiteConfig, options?: ExportSiteOptions
   const hasNavbar = config.blocks.some((b) => b.type === 'navbar')
 
   const toneLayer = buildToneLayer(config.blocks, theme.accent)
+  const scaleCss = buildScaleCss(theme)
   const blocksHtml = config.blocks
     .map((b) => renderBlock(b, toneLayer.toneByBlock.get(b.id)))
     .join('\n\n')
@@ -1517,7 +1569,7 @@ ${ogDescriptionMeta}${ogImageMeta}${faviconLink}
       --font-display: "${theme.fontDisplay}", system-ui, sans-serif;
       --font-mono: "${theme.fontMono}", ui-monospace, monospace;
       --radius-default: ${theme.radius}px;
-      --radius-lg: ${theme.radiusLg}px;
+      --radius-lg: ${theme.radiusLg}px;${theme.h1Size !== undefined ? `\n      --op-h1: ${fluidSize(theme.h1Size)};` : ''}${theme.h2Size !== undefined ? `\n      --op-h2: ${fluidSize(theme.h2Size)};` : ''}${theme.sectionSpacing !== undefined ? `\n      --op-section-y: ${theme.sectionSpacing}px;` : ''}${theme.containerWidth !== undefined ? `\n      --op-container: ${theme.containerWidth}px;` : ''}${theme.gutter !== undefined ? `\n      --op-gutter: ${fluidGutter(theme.gutter)};` : ''}
     }
 
     *, *::before, *::after { box-sizing: border-box; }
@@ -1542,7 +1594,7 @@ ${ogDescriptionMeta}${ogImageMeta}${faviconLink}
     .faq-chevron {
       transition: transform 0.2s ease;
     }
-${toneLayer.css ? `\n    /* Section backgrounds: one block per distinct palette */\n    ${toneLayer.css}\n` : ''}  </style>
+${scaleCss ? `\n    /* Design levers: heading scale, section rhythm, content width */\n    ${scaleCss}\n` : ''}${toneLayer.css ? `\n    /* Section backgrounds: one block per distinct palette */\n    ${toneLayer.css}\n` : ''}  </style>
 ${gaScript}
 ${posthogScript}
 </head>

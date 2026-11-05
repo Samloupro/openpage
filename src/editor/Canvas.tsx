@@ -4,7 +4,7 @@ import { useEditorStore } from '@/store/editorStore'
 import { CanvasEmpty } from './CanvasEmpty'
 import { BlockWrapper } from '@/blocks/BlockWrapper'
 import { RenderBlock } from '@/blocks/registry'
-import { resolveTheme, themeToCSS } from '@/lib/theme-presets'
+import { resolveTheme, themeToCSS, designScale } from '@/lib/theme-presets'
 import { useGoogleFonts } from '@/lib/useGoogleFonts'
 
 export function Canvas() {
@@ -19,6 +19,7 @@ export function Canvas() {
 
   const resolved = useMemo(() => resolveTheme(theme), [theme])
   const cssVars = useMemo(() => themeToCSS(resolved), [resolved])
+  const scale = useMemo(() => designScale(resolved), [resolved])
   useGoogleFonts([resolved.fontSans, resolved.fontDisplay, resolved.fontMono])
 
   const maxWidth = viewport === 'desktop' ? '880px' : viewport === 'tablet' ? '768px' : '375px'
@@ -36,6 +37,11 @@ export function Canvas() {
       }}
       role="region"
       aria-label={`Site preview, ${blocks.length} blocks, ${viewport} viewport`}
+      data-op-h1={scale.h1 ? 'on' : undefined}
+      data-op-h2={scale.h2 ? 'on' : undefined}
+      data-op-space={scale.space ? 'on' : undefined}
+      data-op-container={scale.container ? 'on' : undefined}
+      data-op-gutter={scale.gutter ? 'on' : undefined}
     >
       {blocks.map((block) => (
         <BlockWrapper

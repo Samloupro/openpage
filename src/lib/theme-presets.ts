@@ -274,6 +274,51 @@ export function resolveTheme(partial?: Partial<ThemeConfig>): ThemeConfig {
   return { ...defaultTheme, ...partial }
 }
 
+/**
+ * A heading size is one number: the desktop maximum. The floor and the growth
+ * are derived so the heading reaches its maximum at 1024px and never drops
+ * below 62% of it — the ratio Creder's own clamp uses (46.4 → 74.88).
+ *
+ * The model writes `75`, not `clamp(46.5px, 7.32vw, 75px)`. Asking a model for
+ * valid CSS is a coin flip; asking it for a number is not.
+ */
+export function fluidSize(max: number, floorRatio = 0.62): string {
+  const floor = Math.round(max * floorRatio * 10) / 10
+  const vw = Math.round((max / 10.24) * 100) / 100
+  return `clamp(${floor}px, ${vw}vw, ${max}px)`
+}
+
+/**
+ * The gutter keeps a mobile floor and grows to the desktop value at 1440px.
+ * A flat px value would put 70px of padding on a 375px screen.
+ */
+export function fluidGutter(px: number): string {
+  const vw = Math.round((px / 14.4) * 100) / 100
+  return `clamp(1.5rem, ${vw}vw, ${px}px)`
+}
+
+export interface DesignScale {
+  h1: boolean
+  h2: boolean
+  space: boolean
+  container: boolean
+  gutter: boolean
+}
+
+/**
+ * Which levers the theme actually pulls. Each one is independent: clearing the
+ * H1 field must not leave the H2 override pointing at an undefined variable.
+ */
+export function designScale(theme: ThemeConfig): DesignScale {
+  return {
+    h1: theme.h1Size !== undefined,
+    h2: theme.h2Size !== undefined,
+    space: theme.sectionSpacing !== undefined,
+    container: theme.containerWidth !== undefined,
+    gutter: theme.gutter !== undefined,
+  }
+}
+
 export function hexToRgb(hex: string): string {
   const h = hex.replace('#', '')
   const r = parseInt(h.slice(0, 2), 16)
@@ -308,6 +353,15 @@ export function themeToCSS(theme: ThemeConfig): Record<string, string> {
     '--font-mono': `"${theme.fontMono}", ui-monospace, monospace`,
     '--radius-default': `${theme.radius}px`,
     '--radius-lg': `${theme.radiusLg}px`,
+    ...(theme.h1Size !== undefined ? { '--op-h1': fluidSize(theme.h1Size) } : {}),
+    ...(theme.h2Size !== undefined ? { '--op-h2': fluidSize(theme.h2Size) } : {}),
+    ...(theme.sectionSpacing !== undefined
+      ? { '--op-section-y': `${theme.sectionSpacing}px` }
+      : {}),
+    ...(theme.containerWidth !== undefined
+      ? { '--op-container': `${theme.containerWidth}px` }
+      : {}),
+    ...(theme.gutter !== undefined ? { '--op-gutter': fluidGutter(theme.gutter) } : {}),
   }
 }
 

@@ -41,7 +41,8 @@ Return a JSON object matching this exact schema:
     "accent": "#hex", "accentDim": "#hex",
     "borderDefault": "#hex", "borderSubtle": "#hex", "borderHover": "#hex",
     "fontSans": "Font Name", "fontDisplay": "Font Name", "fontMono": "Font Name",
-    "radius": 8, "radiusLg": 12
+    "radius": 8, "radiusLg": 12,
+    "h1Size": 48, "h2Size": 30, "sectionSpacing": 80, "containerWidth": 1024, "gutter": 40
   },
   "pages": [
     { "id": "page-home", "name": "Home", "path": "/", "blocks": [...] },
@@ -53,6 +54,16 @@ Return a JSON object matching this exact schema:
 Each page has its own blocks array. Generate at least 2 pages: Home and one additional page (About, Pricing, or Features depending on the site type). The top-level "blocks" array should be empty (blocks live inside pages).
 
 A block may carry an optional "background": { "color": "#RRGGBB", "tone": "auto" }. It gives that one section its own background colour; the text, card and border colours of the section are derived from it automatically, so never try to set them. Omit it and the section sits on the page background.
+
+The theme carries five optional design levers. Each is a plain number in px — never write CSS, never write a clamp. Omit a lever and the blocks keep their built-in value.
+
+- "h1Size" (32-96): the desktop size of the hero headline. 44 is restrained, 56 is editorial, 72 is a statement.
+- "h2Size" (20-64): the desktop size of section titles. Keep it at roughly 60% of h1Size.
+- "sectionSpacing" (32-160): the vertical padding of every section. 56 is dense, 80 is standard, 120 is airy.
+- "containerWidth" (960-1600): the width of the widest content column. 1024 is standard, 1280 is wide, 1440 is full-bleed editorial.
+- "gutter" (16-96): the horizontal padding at desktop. 24 is tight, 40 is standard, 70 is generous.
+
+Pick these to match the brief, not at random: a luxury brand wants a large h1, generous spacing and a wide gutter; a dense SaaS dashboard wants the opposite. Two sites generated from different briefs should not share the same five numbers.
 
 ## Available Block Types
 
