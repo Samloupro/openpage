@@ -57,16 +57,17 @@ function useGenerationOrchestration() {
     const controller = new AbortController()
     abortRef.current = controller
 
-    // Timeout after 30s to prevent infinite loading
+    // A remote model regularly needs 30-90s for a full multi-page config; the
+    // server itself gives up at 120s.
     const timeout = setTimeout(() => {
       controller.abort()
       setGenerationError('Generation timed out')
-      toast.error('Generation timed out. Try again or add a Gemini API key in Settings.')
+      toast.error('Generation timed out. Try again or check the provider in Settings.')
       clearGeneration()
-    }, 30000)
+    }, 150000)
 
     generateSiteConfig(generationPrompt, controller.signal)
-      .then(({ config, source }) => {
+      .then(({ config, source, warning }) => {
         clearTimeout(timeout)
         if (controller.signal.aborted) return
         setConfig(config)
@@ -76,7 +77,11 @@ function useGenerationOrchestration() {
         }
         clearGeneration()
         if (source === 'template') {
-          toast('Generated from template. Add a Gemini API key in Settings for AI generation.')
+          toast(
+            warning
+              ? `Generated from template — ${warning}`
+              : 'Generated from template. Configure an AI provider in Settings for AI generation.',
+          )
         }
       })
       .catch((err) => {

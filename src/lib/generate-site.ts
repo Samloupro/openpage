@@ -2,52 +2,85 @@ import type { SiteConfig, BlockConfig, ThemeConfig } from '@/blocks/types'
 import { blockMetadata } from '@/lib/block-metadata'
 import { GENERATION_PROMPT } from '@/lib/generation-prompt'
 import { getTemplateForPrompt } from '@/lib/templates'
+import { clientGeminiKey, preferredModel } from '@/lib/llm-client'
 
 const VALID_BLOCK_TYPES = new Set<string>(blockMetadata.map((b) => b.type))
 const VARIANT_MAP = Object.fromEntries(blockMetadata.map((b) => [b.type, new Set(b.variants)]))
 const DEFAULT_PROPS_MAP = Object.fromEntries(blockMetadata.map((b) => [b.type, b.defaultProps]))
 
 const GEMINI_MODEL = 'gemini-3-flash-preview'
-const STORAGE_KEY = 'openpage-gemini-key'
 
 export interface GenerationResult {
   config: SiteConfig
   source: 'ai' | 'template'
+  provider?: 'server' | 'gemini'
+  model?: string
+  warning?: string
 }
 
+/**
+ * Three-step chain, in this order:
+ *   1. POST /api/generate — the server owns the provider (OpenRouter, OmniRoute,
+ *      Gemini, anything OpenAI-compatible) and the key.
+ *   2. Client-side Gemini, only if a key was entered in Settings.
+ *   3. Built-in template, instant and honest about it.
+ */
 export async function generateSiteConfig(prompt: string, signal?: AbortSignal): Promise<GenerationResult> {
-  // 1. Try client-side Gemini if key exists
-  const apiKey = localStorage.getItem(STORAGE_KEY)
-  if (apiKey) {
-    try {
-      const config = await callGeminiDirect(prompt, apiKey, signal)
-      return { config, source: 'ai' }
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') throw err
-      // Fall through to server
-    }
-  }
+  const notes: string[] = []
 
-  // 2. Try server endpoint
   try {
     const res = await fetch('/api/generate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt }),
+      headers: { 'Content-Type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({ prompt, model: preferredModel() }),
       signal,
     })
 
     const contentType = res.headers.get('content-type') || ''
-    if (contentType.includes('application/json') && res.ok) {
-      const raw = await res.json()
-      return { config: validateSiteConfig(raw, prompt), source: 'ai' }
+    if (contentType.includes('application/json')) {
+      const payload = (await res.json()) as {
+        config?: unknown
+        provider?: string
+        model?: string
+        error?: string
+        message?: string
+      }
+
+      if (res.ok && payload.config) {
+        return {
+          config: validateSiteConfig(payload.config, prompt),
+          source: 'ai',
+          provider: 'server',
+          model: payload.model,
+        }
+      }
+
+      // 501 means "no provider on this server" — a normal state, not a failure.
+      if (res.status !== 501) {
+        notes.push(payload.message || payload.error || `Server generation failed (${res.status})`)
+      }
     }
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') throw err
+    notes.push(err instanceof Error ? err.message : String(err))
   }
 
-  // 3. Smart fallback template (instant, no fake progress)
-  return { config: getTemplateForPrompt(prompt), source: 'template' }
+  const apiKey = clientGeminiKey()
+  if (apiKey) {
+    try {
+      const config = await callGeminiDirect(prompt, apiKey, signal)
+      return { config, source: 'ai', provider: 'gemini', model: GEMINI_MODEL }
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') throw err
+      notes.push(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  return {
+    config: getTemplateForPrompt(prompt),
+    source: 'template',
+    ...(notes.length > 0 ? { warning: notes.join(' · ') } : {}),
+  }
 }
 
 async function callGeminiDirect(prompt: string, apiKey: string, signal?: AbortSignal): Promise<SiteConfig> {

@@ -8,6 +8,7 @@ import { useConfigStore, defaultConfig } from '@/store/configStore'
 import { useEditorStore } from '@/store/editorStore'
 import { hexToRgb } from '@/lib/theme-presets'
 import { templateMeta, buildTemplate } from '@/lib/templates'
+import { clientGeminiKey, useLlmStatus } from '@/lib/llm-client'
 
 const templateIcons: Record<string, typeof Briefcase> = {
   Briefcase, UtensilsCrossed, Building2, BookOpen,
@@ -83,7 +84,8 @@ function PromptSection() {
     navigate('/editor')
   }
 
-  const hasGeminiKey = !!localStorage.getItem('openpage-gemini-key')
+  const { status: llmStatus } = useLlmStatus()
+  const hasAi = Boolean(llmStatus?.configured) || Boolean(clientGeminiKey())
   const isFocused = prompt.length > 0
 
   return (
@@ -194,11 +196,11 @@ function PromptSection() {
           >
             or start blank
           </button>
-          {!hasGeminiKey && (
+          {!hasAi && (
             <p className="text-text-3 text-[10.5px]">
               Using template mode.{' '}
               <NavLink to="/settings" className="text-green hover:text-green-dim transition-colors">
-                Add a Gemini API key
+                Configure an AI provider
               </NavLink>
               {' '}for AI-generated sites.
             </p>

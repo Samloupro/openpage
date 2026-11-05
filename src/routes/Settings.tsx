@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import {
-  Settings2, Search as SearchIcon, Key, Check,
+  Settings2, Search as SearchIcon, Key, Check, RefreshCw,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useProjectsStore, type ProjectSettings } from '@/store/projectsStore'
 import { useEditorStore } from '@/store/editorStore'
+import {
+  GEMINI_KEY_STORAGE_KEY, clientGeminiKey, preferredModel, setPreferredModel, useLlmStatus,
+} from '@/lib/llm-client'
 
 type SettingsTab = 'general' | 'seo' | 'api'
 
@@ -123,17 +126,24 @@ function SeoPanel({ settings }: { settings: ReturnType<typeof useSettingsState> 
 }
 
 function ApiPanel({ settings }: { settings: ReturnType<typeof useSettingsState> }) {
-  const [geminiKey, setGeminiKey] = useState(localStorage.getItem('openpage-gemini-key') || '')
+  const { status, loading, refresh } = useLlmStatus()
+  const [geminiKey, setGeminiKey] = useState(clientGeminiKey() || '')
   const [showKey, setShowKey] = useState(false)
   const [testing, setTesting] = useState(false)
+  const [model, setModel] = useState(preferredModel() || '')
 
   function handleKeyChange(value: string) {
     setGeminiKey(value)
     if (value) {
-      localStorage.setItem('openpage-gemini-key', value)
+      localStorage.setItem(GEMINI_KEY_STORAGE_KEY, value)
     } else {
-      localStorage.removeItem('openpage-gemini-key')
+      localStorage.removeItem(GEMINI_KEY_STORAGE_KEY)
     }
+  }
+
+  function handleModelChange(value: string) {
+    setModel(value)
+    setPreferredModel(value)
   }
 
   async function handleTest() {
@@ -155,9 +165,68 @@ function ApiPanel({ settings }: { settings: ReturnType<typeof useSettingsState> 
     }
   }
 
+  const models = status?.models ?? []
+
   return (
     <div>
       <h2 className="text-lg font-semibold mb-4">API Keys</h2>
+
+      <div className="mb-6 p-4 rounded-xl bg-bg-2 border border-border-default">
+        <div className="flex items-center justify-between mb-2.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-text-3">Server AI</span>
+          <button
+            onClick={refresh}
+            disabled={loading}
+            className="flex items-center gap-1.5 text-[11px] text-text-2 hover:text-text-0 transition-colors disabled:opacity-40"
+          >
+            <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
+            {loading ? 'Checking' : 'Refresh'}
+          </button>
+        </div>
+
+        {status?.configured ? (
+          <>
+            <div className="text-[13px] text-text-0">
+              {status.provider === 'openai' ? 'OpenAI-compatible' : 'Google Gemini'}
+              {status.model ? <span className="text-text-2 font-mono text-[12px]"> · {status.model}</span> : null}
+            </div>
+            {status.baseUrl && (
+              <div className="text-[11px] text-text-3 mt-1 break-all font-mono">{status.baseUrl}</div>
+            )}
+            <div className={`text-[11px] mt-1.5 ${status.reachable === false ? 'text-red-400' : 'text-green'}`}>
+              {status.reachable === false
+                ? `Unreachable — ${status.error || 'unknown error'}`
+                : `Reachable${models.length > 0 ? ` · ${models.length} models` : ''}`}
+            </div>
+
+            {models.length > 0 && (
+              <div className="mt-3">
+                <label className="block text-[11.5px] text-text-2 mb-1.5 font-medium">Model</label>
+                <select
+                  value={model}
+                  onChange={(e) => handleModelChange(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-border-default bg-bg-1 text-text-0 text-[13px] outline-none focus:border-green cursor-pointer font-mono"
+                >
+                  <option value="">Server default ({status.model})</option>
+                  {models.map((id) => (
+                    <option key={id} value={id}>{id}</option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-text-3 mt-1.5">
+                  Applies to AI generation in this browser. The API key never leaves the server.
+                </p>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-[12px] text-text-2 leading-relaxed">
+            No provider configured on the server. Set{' '}
+            <span className="font-mono text-text-1 text-[11px]">OPENPAGE_LLM_BASE_URL</span> and{' '}
+            <span className="font-mono text-text-1 text-[11px]">OPENPAGE_LLM_API_KEY</span>{' '}
+            to generate with OpenRouter, OmniRoute, or any OpenAI-compatible endpoint.
+          </p>
+        )}
+      </div>
 
       <FieldGroup label="Deploy Access Key">
         <ControlledInput
@@ -170,7 +239,7 @@ function ApiPanel({ settings }: { settings: ReturnType<typeof useSettingsState> 
         </p>
       </FieldGroup>
 
-      <FieldGroup label="Gemini API Key">
+      <FieldGroup label="Gemini API Key (browser fallback)">
         <div className="flex gap-2">
           <input
             type={showKey ? 'text' : 'password'}
@@ -194,7 +263,7 @@ function ApiPanel({ settings }: { settings: ReturnType<typeof useSettingsState> 
           </button>
         </div>
         <p className="text-[11px] text-text-3 mt-1.5">
-          Used for client-side AI generation. Get one at{' '}
+          Only used when the server has no provider. Kept in this browser's localStorage. Get one at{' '}
           <span className="text-text-2">aistudio.google.com</span>
         </p>
       </FieldGroup>
