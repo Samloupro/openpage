@@ -132,24 +132,56 @@ function logoPlaceholderSvg(name: string): string {
 // Block renderers
 // ---------------------------------------------------------------------------
 
+function normalizeNavLinks(raw: unknown, urls: string[]): { label: string; href?: string }[] {
+  if (!Array.isArray(raw)) return []
+
+  const out: { label: string; href?: string }[] = []
+  raw.forEach((entry, index) => {
+    if (typeof entry === 'string') {
+      if (entry.trim()) out.push({ label: entry, href: urls[index] })
+      return
+    }
+    if (entry && typeof entry === 'object') {
+      const record = entry as Record<string, unknown>
+      const label = record.label ?? record.text ?? record.name ?? record.title
+      const href = record.href ?? record.url ?? urls[index]
+      if (typeof label === 'string' && label.trim()) {
+        out.push({ label, href: typeof href === 'string' && href.trim() ? href : undefined })
+      }
+    }
+  })
+  return out
+}
+
 function renderNavbar(block: BlockConfig): string {
   const logo = escapeHtml(prop(block.props, 'logo', 'Brand'))
   const logoImage = prop<string>(block.props, 'logoImage', '')
-  const links = prop<string[]>(block.props, 'links', [])
-  const ctaText = escapeHtml(prop(block.props, 'ctaText', 'Get Started'))
+  const links = normalizeNavLinks(
+    prop<unknown>(block.props, 'links', []),
+    prop<string[]>(block.props, 'linkUrls', [])
+  )
+  const ctaText = prop(block.props, 'ctaText', 'Get Started')
+  const ctaUrl = prop<string>(block.props, 'ctaUrl', '')
+
+  const desktopLinkClass = 'text-[13px] text-text-2 hover:text-text-0 transition-colors'
+  const mobileLinkClass =
+    'block px-4 py-3 rounded-lg text-[14px] text-text-1 hover:text-text-0 hover:bg-bg-2 transition-colors'
+  const ctaClass =
+    'px-4 py-2 rounded-lg bg-green text-black text-[13px] font-semibold hover:bg-green-dim transition-colors'
 
   const navLinks = links
-    .map(
-      (l) =>
-        `          <span class="text-[13px] text-text-2 hover:text-text-0 transition-colors cursor-pointer">${escapeHtml(l)}</span>`
-    )
+    .map((link) => `          ${renderLink(link.label, link.href, desktopLinkClass)}`)
+    .join('\n')
+  const mobileLinks = links
+    .map((link) => `        ${renderLink(link.label, link.href, mobileLinkClass)}`)
     .join('\n')
 
   const logoHtml = logoImage
     ? `<img src="${escapeHtml(logoImage)}" alt="${logo}" class="h-8 w-auto object-contain" />`
     : `<div class="w-8 h-8 rounded-lg bg-green/10 flex items-center justify-center"><div class="w-4 h-4 rounded-full bg-green"></div></div>`
 
-  return `  <nav class="px-6 md:px-10 py-4 flex items-center justify-between">
+  return `  <div class="relative">
+  <nav class="px-6 md:px-10 py-4 flex items-center justify-between">
     <div class="flex items-center gap-2">
       ${logoHtml}
       <span class="font-semibold text-[15px] text-text-0 tracking-tight">${logo}</span>
@@ -158,12 +190,19 @@ function renderNavbar(block: BlockConfig): string {
 ${navLinks}
     </div>
     <div class="flex items-center gap-3">
-      <button class="px-4 py-2 rounded-lg bg-green text-black text-[13px] font-semibold hover:bg-green-dim transition-colors">${ctaText}</button>
-      <button class="lg:hidden w-9 h-9 rounded-lg border border-border-default flex items-center justify-center text-text-2 hover:text-text-0 hover:bg-bg-3 transition-colors">
+      ${renderLink(ctaText, ctaUrl, ctaClass)}
+      <button type="button" onclick="toggleMobileMenu(this)" aria-expanded="false" aria-controls="op-mobile-menu" aria-label="Toggle navigation" class="lg:hidden w-11 h-11 rounded-lg border border-border-default flex items-center justify-center text-text-2 hover:text-text-0 hover:bg-bg-3 transition-colors">
         ${SVG_MENU}
       </button>
     </div>
-  </nav>`
+  </nav>
+  <div id="op-mobile-menu" class="hidden lg:hidden border-t border-border-subtle bg-bg-1 px-4 py-3 space-y-1">
+${mobileLinks}
+    <div class="pt-2">
+      ${renderLink(ctaText, ctaUrl, `${ctaClass} block text-center`)}
+    </div>
+  </div>
+  </div>`
 }
 
 // ---------------------------------------------------------------------------
@@ -1194,6 +1233,7 @@ export function exportSiteToHTML(config: SiteConfig, options?: ExportSiteOptions
   const settings = options?.settings
 
   const hasFaq = config.blocks.some((b) => b.type === 'faq')
+  const hasNavbar = config.blocks.some((b) => b.type === 'navbar')
 
   const blocksHtml = config.blocks.map((b) => renderBlock(b)).join('\n\n')
 
@@ -1243,6 +1283,23 @@ export function exportSiteToHTML(config: SiteConfig, options?: ExportSiteOptions
     n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
     posthog.init(${JSON.stringify(posthogKey)}, { api_host: 'https://us.i.posthog.com' });
   </script>`
+    : ''
+
+  const mobileMenuScript = hasNavbar
+    ? `
+    <script>
+      function toggleMobileMenu(btn) {
+        var menu = document.getElementById('op-mobile-menu');
+        if (!menu) return;
+        menu.classList.toggle('hidden');
+        btn.setAttribute('aria-expanded', menu.classList.contains('hidden') ? 'false' : 'true');
+      }
+      document.addEventListener('click', function (event) {
+        var menu = document.getElementById('op-mobile-menu');
+        if (!menu || menu.classList.contains('hidden')) return;
+        if (event.target.closest('#op-mobile-menu a')) menu.classList.add('hidden');
+      });
+    </script>`
     : ''
 
   const faqScript = hasFaq
@@ -1381,6 +1438,7 @@ ${posthogScript}
 <body>
 
 ${blocksHtml}
+${mobileMenuScript}
 ${faqScript}
 </body>
 </html>`
