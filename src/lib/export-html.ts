@@ -714,6 +714,9 @@ function renderFooterMultiColumn(block: BlockConfig): string {
   const logo = escapeHtml(prop(block.props, 'logo', 'Brand'))
   const logoImage = prop<string>(block.props, 'logoImage', '')
   const copyright = escapeHtml(prop(block.props, 'copyright', ''))
+  const description = escapeHtml(
+    prop(block.props, 'description', 'Build beautiful websites with structured JSON config.'),
+  )
   const links = prop<string[]>(block.props, 'links', [])
   const columns = prop<{ title: string; links: string[] }[]>(
     block.props,
@@ -764,7 +767,7 @@ ${colLinks}
             ${mcLogoHtml}
             <span class="text-sm font-semibold">${logo}</span>
           </div>
-          <p class="text-[12px] text-text-3 leading-relaxed max-w-[200px]">Build beautiful websites with structured JSON config.</p>
+          <p class="text-[12px] text-text-3 leading-relaxed max-w-[200px]">${description}</p>
         </div>
 ${colsHtml}
       </div>
@@ -1186,6 +1189,87 @@ ${logosHtml}
 }
 
 // ---------------------------------------------------------------------------
+// Markdown (the subset src/lib/markdown.ts renders in the editor)
+// ---------------------------------------------------------------------------
+
+function inlineMarkdown(text: string): string {
+  return escapeHtml(text)
+    .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-text-0">$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em class="italic">$1</em>')
+}
+
+function renderMarkdownHtml(text: string): string {
+  const out: string[] = []
+  let list: string[] = []
+
+  const flush = () => {
+    if (list.length > 0) {
+      out.push(`<ul class="list-disc list-inside space-y-1 mb-4 text-text-1">${list.join('')}</ul>`)
+      list = []
+    }
+  }
+
+  for (const raw of text.split('\n')) {
+    const line = raw.trim()
+    if (!line) {
+      flush()
+      continue
+    }
+    if (line.startsWith('### ')) {
+      flush()
+      out.push(
+        `<h3 class="text-lg font-semibold font-display mb-2 mt-4">${inlineMarkdown(line.slice(4))}</h3>`,
+      )
+      continue
+    }
+    if (line.startsWith('## ')) {
+      flush()
+      out.push(
+        `<h2 class="text-xl font-semibold font-display mb-3 mt-5">${inlineMarkdown(line.slice(3))}</h2>`,
+      )
+      continue
+    }
+    if (line.startsWith('- ') || line.startsWith('* ')) {
+      list.push(`<li>${inlineMarkdown(line.slice(2))}</li>`)
+      continue
+    }
+    flush()
+    out.push(`<p class="text-text-1 leading-relaxed mb-3">${inlineMarkdown(line)}</p>`)
+  }
+
+  flush()
+  return out.join('\n')
+}
+
+function renderContent(block: BlockConfig): string {
+  const body = prop<string>(block.props, 'body', '')
+  const html = renderMarkdownHtml(body)
+  if (!html.trim()) return ''
+
+  if (block.variant === 'highlight') {
+    return `  <section class="px-6 md:px-10 py-12 md:py-16">
+      <div class="max-w-3xl mx-auto border-l-2 border-green pl-6 md:pl-8 bg-green/[0.04] rounded-r-lg py-6 px-4">
+${html}
+      </div>
+  </section>`
+  }
+
+  if (block.variant === 'columns') {
+    return `  <section class="px-6 md:px-10 py-12 md:py-16">
+      <div class="max-w-5xl mx-auto md:columns-2 md:gap-12">
+${html}
+      </div>
+  </section>`
+  }
+
+  return `  <section class="px-6 md:px-10 py-12 md:py-16">
+      <div class="max-w-3xl mx-auto">
+${html}
+      </div>
+  </section>`
+}
+
+// ---------------------------------------------------------------------------
 // Block dispatcher
 // ---------------------------------------------------------------------------
 
@@ -1217,6 +1301,8 @@ function renderBlock(block: BlockConfig): string {
       return renderNewsletter(block)
     case 'logocloud':
       return renderLogoCloud(block)
+    case 'content':
+      return renderContent(block)
     default:
       return `  <!-- Unknown block type: ${escapeHtml(block.type)} -->`
   }
