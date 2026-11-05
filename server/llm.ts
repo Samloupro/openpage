@@ -189,7 +189,7 @@ async function callGemini(
   systemPrompt: string,
   signal: AbortSignal,
   temperature: number,
-): Promise<string> {
+): Promise<{ text: string; usage?: unknown }> {
   const url = `${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(config.apiKey ?? '')}`
 
   const res = await request(
@@ -211,12 +211,13 @@ async function callGemini(
 
   const payload = (await res.json()) as {
     candidates?: { content?: { parts?: { text?: string }[] } }[]
+    usageMetadata?: unknown
   }
   const text = (payload.candidates?.[0]?.content?.parts ?? [])
     .map((part) => part.text ?? '')
     .join('')
 
-  return text
+  return { text, usage: payload.usageMetadata }
 }
 
 /**
@@ -242,7 +243,7 @@ async function callOpenAi(
   signal: AbortSignal,
   temperature: number,
   jsonSchema?: JsonSchemaSpec,
-): Promise<string> {
+): Promise<{ text: string; usage?: unknown }> {
   const url = `${config.baseUrl}/chat/completions`
   const headers = { 'content-type': 'application/json', ...authHeader(config) }
 
@@ -279,8 +280,19 @@ async function callOpenAi(
 
   await assertOk(res, 'LLM')
 
-  const payload = (await res.json()) as { choices?: { message?: { content?: string } }[] }
-  return payload.choices?.[0]?.message?.content ?? ''
+  const payload = (await res.json()) as {
+    choices?: { message?: { content?: string } }[]
+    usage?: unknown
+  }
+  return { text: payload.choices?.[0]?.message?.content ?? '', usage: payload.usage }
+}
+
+export interface LlmUsage {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  /** How much of the prompt the provider served from its prefix cache. */
+  cachedTokens?: number
 }
 
 export interface JsonSchemaSpec {
@@ -304,6 +316,29 @@ export interface GenerateJsonResult {
   data: unknown
   provider: LlmProvider
   model: string
+  /** Absent when the gateway does not report usage. */
+  usage?: LlmUsage
+}
+
+function normalizeUsage(raw: unknown): LlmUsage | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const record = raw as Record<string, unknown>
+  const prompt = Number(record.prompt_tokens ?? record.promptTokenCount ?? 0)
+  const completion = Number(record.completion_tokens ?? record.candidatesTokenCount ?? 0)
+  const total = Number(record.total_tokens ?? record.totalTokenCount ?? prompt + completion)
+  if (!Number.isFinite(prompt) || !Number.isFinite(completion)) return undefined
+
+  const details = record.prompt_tokens_details as Record<string, unknown> | undefined
+  const cached = Number(
+    record.cached_tokens ?? details?.cached_tokens ?? record.cache_read_input_tokens ?? Number.NaN,
+  )
+
+  return {
+    promptTokens: prompt,
+    completionTokens: completion,
+    totalTokens: total || prompt + completion,
+    ...(Number.isFinite(cached) ? { cachedTokens: cached } : {}),
+  }
 }
 
 export async function generateJson(options: GenerateJsonOptions): Promise<GenerateJsonResult> {
@@ -320,11 +355,16 @@ export async function generateJson(options: GenerateJsonOptions): Promise<Genera
   // A reasoning model occasionally spends its whole budget on reasoning and
   // returns an empty message. One more attempt costs a second; surfacing
   // "empty completion" to the user costs a retry by hand.
-  let text = await call()
-  if (!text.trim()) text = await call()
-  if (!text.trim()) {
+  let reply = await call()
+  if (!reply.text.trim()) reply = await call()
+  if (!reply.text.trim()) {
     throw new LlmError('empty_completion', 'The model returned an empty completion')
   }
 
-  return { data: parseJsonLoose(text), provider: config.provider, model }
+  return {
+    data: parseJsonLoose(reply.text),
+    provider: config.provider,
+    model,
+    usage: normalizeUsage(reply.usage),
+  }
 }

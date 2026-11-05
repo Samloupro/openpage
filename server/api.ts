@@ -182,6 +182,7 @@ export function createOpenPageApi() {
           summary: typeof result.data.summary === 'string' ? result.data.summary : '',
           provider: result.provider,
           model: result.model,
+          usage: result.usage,
         })
       }
 
@@ -224,6 +225,7 @@ export function createOpenPageApi() {
         config: result.data,
         provider: result.provider,
         model: result.model,
+        usage: result.usage,
       })
     } catch (error) {
       const failure =

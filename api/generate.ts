@@ -64,7 +64,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       timeoutMs: 60_000,
       jsonSchema: SITE_CONFIG_SCHEMA,
     })
-    return res.status(200).json({ config: result.data, provider: result.provider, model: result.model })
+    return res.status(200).json({
+      config: result.data,
+      provider: result.provider,
+      model: result.model,
+      usage: result.usage,
+    })
   } catch (error) {
     const failure =
       error instanceof LlmError
