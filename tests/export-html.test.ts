@@ -103,6 +103,30 @@ describe('exportSiteToHTML block coverage', () => {
     expect(html).toContain('&lt;script&gt;')
   })
 
+  it('fits the stats grid to the number of stats', () => {
+    const html = exportSiteToHTML({
+      name: 'Stats',
+      blocks: [
+        {
+          id: 'stats-1',
+          type: 'stats',
+          variant: 'grid',
+          props: {
+            items: [
+              { value: '48 h', label: 'premier avis' },
+              { value: '20 min', label: 'diagnostic' },
+              { value: 'Toutes', label: 'les offres' },
+            ],
+          },
+        },
+      ],
+    })
+
+    // three stats in a two-column grid leaves the third card orphaned
+    expect(html).toContain('grid-cols-1 sm:grid-cols-3')
+    expect(html).not.toContain('grid-cols-2 lg:grid-cols-4')
+  })
+
   it('uses the footer description prop instead of the built-in copy', () => {
     const html = exportSiteToHTML({
       name: 'Footer',

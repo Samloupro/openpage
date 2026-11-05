@@ -37,7 +37,7 @@ function MenuButton({ open, onToggle }: { open: boolean; onToggle: () => void })
       onClick={onToggle}
       aria-expanded={open}
       aria-label="Toggle navigation"
-      className="@2xl:hidden w-11 h-11 rounded-lg border border-border-default flex items-center justify-center text-text-2 hover:text-text-0 hover:bg-bg-3 transition-colors"
+      className="@2xl:hidden shrink-0 w-11 h-11 rounded-lg border border-border-default flex items-center justify-center text-text-2 hover:text-text-0 hover:bg-bg-3 transition-colors"
     >
       {open ? <X size={16} /> : <Menu size={16} />}
     </button>
@@ -73,7 +73,7 @@ function NavbarDefault({ props }: { props: NavbarProps }) {
 
         {/* CTA + mobile menu */}
         <div className="flex items-center gap-3">
-          <button className="px-4 py-2 rounded-lg bg-green text-black text-[13px] font-semibold hover:bg-green-dim transition-colors">
+          <button className="hidden @lg:inline-flex px-4 py-2 rounded-lg bg-green text-black text-[13px] font-semibold hover:bg-green-dim transition-colors">
             {ctaText}
           </button>
           <MenuButton open={open} onToggle={() => setOpen((value) => !value)} />

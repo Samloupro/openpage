@@ -19,13 +19,21 @@ const defaultStats: StatItem[] = [
 
 function StatsGrid({ props }: { props: StatsProps }) {
   const items = props.items || defaultStats
+  const columns =
+    items.length <= 1
+      ? 'grid-cols-1'
+      : items.length === 2
+        ? 'grid-cols-1 @lg:grid-cols-2'
+        : items.length === 3
+          ? 'grid-cols-1 @lg:grid-cols-3'
+          : 'grid-cols-2 @2xl:grid-cols-4'
 
   return (
     <section className="px-6 @md:px-10 py-12 @md:py-16">
       {props.title && (
         <h2 className="reveal-fade-up reveal-d1 text-xl font-bold tracking-tight text-center mb-8">{props.title}</h2>
       )}
-      <div className="grid grid-cols-2 @2xl:grid-cols-4 gap-4">
+      <div className={`grid ${columns} gap-4`}>
         {items.map((item, i) => (
           <div key={i} className={`reveal-fade-up reveal-d${Math.min(i + 2, 8)} text-center p-4 rounded-xl bg-bg-2 border border-border-default`}>
             <div className="text-3xl @md:text-4xl font-bold tracking-tight text-green mb-1">

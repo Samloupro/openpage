@@ -190,8 +190,8 @@ function renderNavbar(block: BlockConfig): string {
 ${navLinks}
     </div>
     <div class="flex items-center gap-3">
-      ${renderLink(ctaText, ctaUrl, ctaClass)}
-      <button type="button" onclick="toggleMobileMenu(this)" aria-expanded="false" aria-controls="op-mobile-menu" aria-label="Toggle navigation" class="lg:hidden w-11 h-11 rounded-lg border border-border-default flex items-center justify-center text-text-2 hover:text-text-0 hover:bg-bg-3 transition-colors">
+      ${renderLink(ctaText, ctaUrl, `${ctaClass} hidden sm:inline-flex`)}
+      <button type="button" onclick="toggleMobileMenu(this)" aria-expanded="false" aria-controls="op-mobile-menu" aria-label="Toggle navigation" class="lg:hidden shrink-0 w-11 h-11 rounded-lg border border-border-default flex items-center justify-center text-text-2 hover:text-text-0 hover:bg-bg-3 transition-colors">
         ${SVG_MENU}
       </button>
     </div>
@@ -902,6 +902,17 @@ const defaultStats: StatItem[] = [
   { value: '4.9/5', label: 'User rating' },
 ]
 
+/**
+ * A fixed four-column grid leaves a hole when a page has three stats, and two
+ * columns leave one card orphaned on a phone. The count decides the grid.
+ */
+function statGridColumns(count: number): string {
+  if (count <= 1) return 'grid-cols-1'
+  if (count === 2) return 'grid-cols-1 sm:grid-cols-2'
+  if (count === 3) return 'grid-cols-1 sm:grid-cols-3'
+  return 'grid-cols-2 lg:grid-cols-4'
+}
+
 function renderStatsGrid(block: BlockConfig): string {
   const title = prop<string>(block.props, 'title', '')
   const items = prop<StatItem[]>(block.props, 'items', defaultStats)
@@ -921,7 +932,7 @@ function renderStatsGrid(block: BlockConfig): string {
 
   return `  <section class="px-6 md:px-10 py-12 md:py-16">
 ${titleHtml}
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="grid ${statGridColumns(items.length)} gap-4">
 ${cards}
       </div>
   </section>`
