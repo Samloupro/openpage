@@ -97,8 +97,15 @@ export const EDIT_OPS_SCHEMA: JsonSchemaSpec = {
             block: { type: 'string' },
             prop: { type: 'string' },
             value: {},
-            color: { type: ['string', 'null'] },
-            tone: { type: 'string', enum: ['auto', 'light', 'dark'] },
+            color: {
+              type: ['string', 'null'],
+              description: 'setBackground only: the section colour as #RRGGBB, or null to clear it.',
+            },
+            tone: {
+              type: 'string',
+              enum: ['auto', 'light', 'dark'],
+              description: 'setBackground only: which way the derived text should go.',
+            },
             index: { type: 'integer' },
             from: { type: 'integer' },
             to: { type: 'integer' },

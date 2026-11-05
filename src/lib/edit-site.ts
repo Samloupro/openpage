@@ -248,6 +248,19 @@ function setPath(target: unknown, path: string, value: unknown): boolean {
   return true
 }
 
+/**
+ * The edit schema is flat, so every field is optional and the model sometimes
+ * invents a synonym (`blockId`, `backgroundColor`). Reading the aliases costs
+ * nothing and turns a dropped op into an applied one.
+ */
+function firstString(op: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = op[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return undefined
+}
+
 function makeBlock(op: Extract<EditOp, { op: 'insert' }>, position: number): BlockConfig | null {
   if (!BLOCK_TYPES.has(op.type)) return null
 
@@ -321,20 +334,23 @@ export function applyEditOps(config: SiteConfig, ops: unknown[]): ApplyResult {
 
     if (kind === 'setBackground') {
       const page = resolvePage(pages, op.page as string | undefined)
-      const block = page?.blocks.find((b) => b.id === op.block)
+      const blockId = firstString(op, ['block', 'blockId', 'blockKey'])
+      const block = page?.blocks.find((b) => b.id === blockId)
       if (!block) {
-        skipped.push(`setBackground: no block ${String(op.block)}`)
+        skipped.push(`setBackground: no block ${String(blockId)}`)
         continue
       }
 
-      const color = op.color
+      const color = 'color' in op
+        ? op.color
+        : (op.backgroundColor ?? op.colorHex ?? op.colorValue)
       if (color === null || color === undefined || color === '' || color === 'none') {
         delete block.background
         applied += 1
         continue
       }
 
-      const background = normalizeBackground({ color, tone: op.tone })
+      const background = normalizeBackground({ color, tone: firstString(op, ['tone', 'textTone']) })
       if (!background) {
         skipped.push(`setBackground: bad colour ${String(color)}`)
         continue

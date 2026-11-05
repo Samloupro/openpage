@@ -347,6 +347,21 @@ describe('setBackground', () => {
     expect(blocks.find((b) => b.id === 'block-nav')?.background).toBeUndefined()
   })
 
+  it('accepts the synonyms a flat schema lets the model invent', () => {
+    const { config, applied } = applyEditOps(site(), [
+      {
+        op: 'setBackground',
+        page: 'page-home',
+        blockId: 'block-hero',
+        backgroundColor: '#0D212E',
+        textTone: 'light',
+      },
+    ])
+
+    expect(applied).toBe(1)
+    expect(config.pages![0].blocks[1].background).toEqual({ color: '#0D212E', tone: 'light' })
+  })
+
   it('accepts a background on an inserted block', () => {
     const { config } = applyEditOps(site(), [
       {
