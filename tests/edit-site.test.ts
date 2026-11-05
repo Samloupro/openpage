@@ -15,7 +15,7 @@ function site(): SiteConfig {
       id: 'block-hero',
       type: 'hero' as const,
       variant: 'centered',
-      props: { headline: 'Un riad au cœur de la médina', subheadline: 'Sept chambres, un patio.' },
+      props: { headline: 'Un riad au cÅ“ur de la mÃ©dina', subheadline: 'Sept chambres, un patio.' },
     },
     {
       id: 'block-features',
@@ -25,7 +25,7 @@ function site(): SiteConfig {
         title: 'Nos services',
         items: [
           { icon: 'Star', title: 'Hammam', description: 'Sur demande' },
-          { icon: 'Zap', title: 'Petit-déjeuner', description: 'Inclus' },
+          { icon: 'Zap', title: 'Petit-dÃ©jeuner', description: 'Inclus' },
         ],
       },
     },
@@ -52,17 +52,17 @@ describe('applyEditOps', () => {
     expect(config.pages![0].blocks[1].props.headline).toBe('Un riad de charme')
     expect(config.pages![0].blocks[1].props.subheadline).toBe('Sept chambres, un patio.')
     // the input is untouched
-    expect(before.pages![0].blocks[1].props.headline).toBe('Un riad au cœur de la médina')
+    expect(before.pages![0].blocks[1].props.headline).toBe('Un riad au cÅ“ur de la mÃ©dina')
   })
 
   it('reaches into a list with a dotted path', () => {
     const { config, applied } = applyEditOps(site(), [
-      { op: 'set', page: 'page-home', block: 'block-features', prop: 'items.1.title', value: 'Petit-déjeuner marocain' },
+      { op: 'set', page: 'page-home', block: 'block-features', prop: 'items.1.title', value: 'Petit-dÃ©jeuner marocain' },
     ])
 
     expect(applied).toBe(1)
     const items = config.pages![0].blocks[2].props.items as { title: string }[]
-    expect(items[1].title).toBe('Petit-déjeuner marocain')
+    expect(items[1].title).toBe('Petit-dÃ©jeuner marocain')
     expect(items[0].title).toBe('Hammam')
   })
 
@@ -99,14 +99,14 @@ describe('applyEditOps', () => {
 
   it('inserts a block at the requested index with the type defaults', () => {
     const { config, applied } = applyEditOps(site(), [
-      { op: 'insert', page: 'page-home', index: 3, type: 'cta', variant: 'simple', props: { headline: 'Réservez' } },
+      { op: 'insert', page: 'page-home', index: 3, type: 'cta', variant: 'simple', props: { headline: 'RÃ©servez' } },
     ])
 
     expect(applied).toBe(1)
     const blocks = config.pages![0].blocks
     expect(blocks).toHaveLength(5)
     expect(blocks[3].type).toBe('cta')
-    expect(blocks[3].props.headline).toBe('Réservez')
+    expect(blocks[3].props.headline).toBe('RÃ©servez')
     // untouched default props are filled in, so the renderer never sees undefined
     expect(typeof blocks[3].props.buttonText).toBe('string')
     expect(blocks[4].id).toBe('block-footer')
@@ -185,7 +185,7 @@ describe('buildOutline', () => {
       id: 'block-hero',
       type: 'hero',
       variant: 'centered',
-      text: 'Un riad au cœur de la médina',
+      text: 'Un riad au cÅ“ur de la mÃ©dina',
     })
     expect(JSON.stringify(outline)).not.toContain('Sept chambres')
   })
@@ -354,7 +354,7 @@ describe('setBackground', () => {
         page: 'page-home',
         index: 1,
         type: 'cta',
-        props: { headline: 'R�servez' },
+        props: { headline: 'Réservez' },
         background: { color: '#0D212E' },
       },
     ])
