@@ -622,6 +622,10 @@ export function PropertiesPanel({ block }: { block: BlockConfig }) {
         </span>
       </div>
 
+      {/* Section background first: it is the one control people look for and
+          it was buried under a long CONTENT section. */}
+      <BackgroundSection block={block} />
+
       {/* Property sections */}
       {schema?.sections.map((section) => (
         <Section key={section.title} title={section.title}>
@@ -634,8 +638,6 @@ export function PropertiesPanel({ block }: { block: BlockConfig }) {
           No editable properties defined for this block type.
         </div>
       )}
-
-      <BackgroundSection block={block} />
 
       {/* View JSON toggle */}
       <div className="border-t border-border-subtle">
