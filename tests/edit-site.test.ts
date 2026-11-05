@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SiteConfig } from '@/blocks/types'
-import { applyEditOps, buildOutline } from '@/lib/edit-site'
+import { applyEditOps, buildOutline, pickFocusPages } from '@/lib/edit-site'
 
 /**
  * The applier is the only thing standing between a model's answer and the live
@@ -195,5 +195,88 @@ describe('buildOutline', () => {
     const outline = buildOutline(config)
 
     expect(JSON.stringify(outline).length).toBeLessThan(JSON.stringify(config).length)
+  })
+})
+
+function multiPageSite(): SiteConfig {
+  const home = site().pages![0].blocks
+  const chambres = [
+    { id: 'block-nav-c', type: 'navbar' as const, variant: 'default', props: { logo: 'Dar Zitoun' } },
+    { id: 'block-hero-c', type: 'hero' as const, variant: 'split', props: { headline: 'Sept chambres' } },
+    { id: 'block-footer-c', type: 'footer' as const, variant: 'simple', props: { logo: 'Dar Zitoun' } },
+  ]
+  const riad = [
+    { id: 'block-hero-r', type: 'hero' as const, variant: 'minimal', props: { headline: 'Le riad' } },
+    { id: 'block-footer-r', type: 'footer' as const, variant: 'simple', props: { logo: 'Dar Zitoun' } },
+  ]
+
+  return {
+    name: 'Dar Zitoun',
+    pages: [
+      { id: 'page-home', name: 'Accueil', path: '/', blocks: home },
+      { id: 'page-chambres', name: 'Chambres & Suites', path: '/chambres', blocks: chambres },
+      { id: 'page-riad', name: 'Le Riad', path: '/le-riad', blocks: riad },
+    ],
+    blocks: home,
+    theme: { accent: '#B4552D' },
+  }
+}
+
+describe('pickFocusPages', () => {
+  const pages = multiPageSite().pages!
+
+  it('follows the page the instruction names', () => {
+    expect([...pickFocusPages(pages, { instruction: 'Change le titre de la page Chambres' })]).toEqual([
+      'page-chambres',
+    ])
+  })
+
+  it('matches without accents or case', () => {
+    expect([...pickFocusPages(pages, { instruction: 'CHAMBRES & SUITES' })]).toEqual(['page-chambres'])
+  })
+
+  it('matches a meaningful word of a multi-word page name', () => {
+    expect([...pickFocusPages(pages, { instruction: 'sur la page riad' })]).toEqual(['page-riad'])
+  })
+
+  it('matches the path', () => {
+    expect([...pickFocusPages(pages, { instruction: 'aller voir /le-riad' })]).toEqual(['page-riad'])
+  })
+
+  it('falls back to the active page when nothing is named', () => {
+    expect([...pickFocusPages(pages, { instruction: 'Ajoute une FAQ avant le footer', activePageId: 'page-riad' })]).toEqual([
+      'page-riad',
+    ])
+  })
+
+  it('sends everything when it has no instruction and no active page', () => {
+    expect(pickFocusPages(pages, {}).size).toBe(3)
+  })
+
+  it('ignores an active page id that no longer exists', () => {
+    expect(pickFocusPages(pages, { activePageId: 'page-gone' }).size).toBe(3)
+  })
+})
+
+describe('focused outline', () => {
+  it('sends the blocks of one page and only the names of the others', () => {
+    const outline = buildOutline(multiPageSite(), {
+      instruction: 'Change le titre du hero de la page Chambres',
+    })
+
+    const [home, chambres, riad] = outline.pages
+    expect(home.blocks).toEqual([])
+    expect(riad.blocks).toEqual([])
+    expect(chambres.blocks).toHaveLength(3)
+    // the other pages stay identifiable, so a rename is still possible
+    expect(riad).toMatchObject({ id: 'page-riad', name: 'Le Riad', path: '/le-riad' })
+  })
+
+  it('costs a fraction of the full outline', () => {
+    const config = multiPageSite()
+    const full = buildOutline(config)
+    const focused = buildOutline(config, { activePageId: 'page-home' })
+
+    expect(JSON.stringify(focused).length).toBeLessThan(JSON.stringify(full).length)
   })
 })

@@ -17,6 +17,8 @@ export const EDIT_PROMPT = `You edit an existing website configuration. You do n
 
 You receive an outline of the current site — pages, blocks, and a short preview of each block's text — followed by one instruction. Answer with the smallest list of operations that satisfies the instruction.
 
+Only the pages whose blocks are listed can be edited. A page with an empty "blocks" array is there so you know it exists; its blocks are not in this request. If the instruction targets such a page, return {"ops":[],"summary":"<say the page was not loaded>"}.
+
 ## Operations
 
 - {"op":"set","page":"<pageId>","block":"<blockId>","prop":"<path>","value":<any>}
@@ -45,7 +47,7 @@ ${BLOCK_CATALOGUE}
 3. Write complete prop values. A "set" replaces the whole value, it does not merge. To change one entry of a list you must send the full list with that entry changed.
 4. Keep the site's existing voice, language, and level of detail. Do not translate unless asked.
 5. If the instruction is ambiguous, pick the reading that changes the least and say so in "summary".
-6. If the instruction cannot be done with these operations, return {"ops":[],"summary":"<why>"}.
+6. If the instruction cannot be done with these operations, or targets a page whose blocks are not listed, return {"ops":[],"summary":"<why>"}.
 7. "summary" is one short sentence, in the language of the instruction.
 8. A block inserted without content is a bug. Fill the props that make it render: an faq needs "items" with question/answer pairs, features needs "items", a cta needs "headline".
 9. Changing "accent" without "accentDim" leaves buttons with a mismatched hover. Send both unless the instruction names only one and the user will set the other.

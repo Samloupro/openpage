@@ -30,6 +30,7 @@ export function AiEditPopover() {
   const abortRef = useRef<AbortController | null>(null)
 
   const config = useConfigStore((s) => s.config)
+  const activePageId = useConfigStore((s) => s.activePageId)
   const applyConfig = useConfigStore((s) => s.applyConfig)
 
   useEffect(() => {
@@ -56,7 +57,10 @@ export function AiEditPopover() {
     setBusy(true)
 
     try {
-      const result = await editSiteConfig(config, text, controller.signal)
+      const result = await editSiteConfig(config, text, {
+        activePageId,
+        signal: controller.signal,
+      })
       applyConfig(result.config, 'AI edit')
 
       const count = result.applied

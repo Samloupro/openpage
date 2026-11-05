@@ -95,26 +95,79 @@ function previewText(props: Record<string, unknown>): string | undefined {
   return undefined
 }
 
+/** Lowercase, no accents, single spaces — so "Chambres & Suites" matches "chambres". */
+function normalizeText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9/]+/g, ' ')
+    .trim()
+}
+
 /**
- * Pages plus block ids, types and a text preview. No props, no theme ramp —
- * that is the 90% of the document an edit never needs.
+ * Which pages need their blocks sent. An instruction almost always names its
+ * page; when it does not, the page the user is looking at is the one meant.
+ * Every other page still travels, but as id/name/path only.
  */
-export function buildOutline(config: SiteConfig): EditOutline {
-  const pages = config.pages?.length
-    ? config.pages
-    : [{ id: 'page-home', name: 'Home', path: '/', blocks: config.blocks }]
+export function pickFocusPages(
+  pages: PageConfig[],
+  options: { instruction?: string; activePageId?: string } = {},
+): Set<string> {
+  const instruction = normalizeText(options.instruction ?? '')
+
+  if (instruction) {
+    const named = pages.filter((page) => {
+      const name = normalizeText(page.name)
+      if (name && instruction.includes(name)) return true
+      // "Le Riad" is mentioned as "riad"; two-letter articles match nothing.
+      const words = name.split(' ').filter((word) => word.length >= 4)
+      if (words.some((word) => instruction.includes(word))) return true
+      const path = normalizeText(page.path).replace(/\//g, ' ').trim()
+      return path.length >= 4 && instruction.includes(path)
+    })
+    if (named.length > 0) return new Set(named.map((page) => page.id))
+  }
+
+  if (options.activePageId && pages.some((page) => page.id === options.activePageId)) {
+    return new Set([options.activePageId])
+  }
+
+  return new Set(pages.map((page) => page.id))
+}
+
+/**
+ * Pages plus block ids, types and a text preview. No props — that is the 90%
+ * of the document an edit never needs. Pages outside the focus carry no blocks.
+ */
+export function buildOutline(
+  config: SiteConfig,
+  options: { instruction?: string; activePageId?: string } = {},
+): EditOutline {
+  const pages = pageList(config)
+  const focus = pickFocusPages(pages, options)
 
   const outline: EditOutline = {
     name: config.name,
-    pages: pages.map((page) => ({
-      id: page.id,
-      name: page.name,
-      path: page.path,
-      blocks: page.blocks.map((block) => {
-        const text = previewText(block.props)
-        return { id: block.id, type: block.type, variant: block.variant, ...(text ? { text } : {}) }
-      }),
-    })),
+    pages: pages.map((page) => {
+      if (!focus.has(page.id)) {
+        return { id: page.id, name: page.name, path: page.path, blocks: [] }
+      }
+      return {
+        id: page.id,
+        name: page.name,
+        path: page.path,
+        blocks: page.blocks.map((block) => {
+          const text = previewText(block.props)
+          return {
+            id: block.id,
+            type: block.type,
+            variant: block.variant,
+            ...(text ? { text } : {}),
+          }
+        }),
+      }
+    }),
   }
 
   if (config.theme && Object.keys(config.theme).length > 0) {
@@ -364,17 +417,20 @@ export function applyEditOps(config: SiteConfig, ops: unknown[]): ApplyResult {
 export async function editSiteConfig(
   config: SiteConfig,
   instruction: string,
-  signal?: AbortSignal,
+  options: { activePageId?: string; signal?: AbortSignal } = {},
 ): Promise<EditResult> {
   const res = await fetch('/api/edit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', accept: 'application/json' },
     body: JSON.stringify({
-      outline: buildOutline(config),
+      outline: buildOutline(config, {
+        instruction,
+        activePageId: options.activePageId,
+      }),
       instruction,
       model: preferredModel(),
     }),
-    signal,
+    signal: options.signal,
   })
 
   const contentType = res.headers.get('content-type') || ''
