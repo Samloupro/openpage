@@ -280,3 +280,85 @@ describe('focused outline', () => {
     expect(JSON.stringify(focused).length).toBeLessThan(JSON.stringify(full).length)
   })
 })
+
+describe('setBackground', () => {
+  it('gives one section its own colour and leaves the rest alone', () => {
+    const { config, applied } = applyEditOps(site(), [
+      { op: 'setBackground', page: 'page-home', block: 'block-hero', color: '#0d212e' },
+    ])
+
+    expect(applied).toBe(1)
+    expect(config.pages![0].blocks[1].background).toEqual({ color: '#0D212E' })
+    expect(config.pages![0].blocks[0].background).toBeUndefined()
+  })
+
+  it('keeps an explicit tone and drops an unknown one', () => {
+    const withTone = applyEditOps(site(), [
+      { op: 'setBackground', page: 'page-home', block: 'block-hero', color: '#0D212E', tone: 'light' },
+    ])
+    expect(withTone.config.pages![0].blocks[1].background).toEqual({ color: '#0D212E', tone: 'light' })
+
+    const badTone = applyEditOps(site(), [
+      { op: 'setBackground', page: 'page-home', block: 'block-hero', color: '#0D212E', tone: 'sepia' },
+    ])
+    expect(badTone.config.pages![0].blocks[1].background).toEqual({ color: '#0D212E' })
+  })
+
+  it('clears the background with a null colour', () => {
+    const tinted = applyEditOps(site(), [
+      { op: 'setBackground', page: 'page-home', block: 'block-hero', color: '#0D212E' },
+    ]).config
+
+    const cleared = applyEditOps(tinted, [
+      { op: 'setBackground', page: 'page-home', block: 'block-hero', color: null },
+    ])
+
+    expect(cleared.applied).toBe(1)
+    expect(cleared.config.pages![0].blocks[1].background).toBeUndefined()
+  })
+
+  it('skips a colour that is not a six-digit hex', () => {
+    const { applied, skipped } = applyEditOps(site(), [
+      { op: 'setBackground', page: 'page-home', block: 'block-hero', color: 'navy' },
+    ])
+
+    expect(applied).toBe(0)
+    expect(skipped[0]).toContain('bad colour')
+  })
+
+  it('skips a block id that is not in the outline', () => {
+    const { applied, skipped } = applyEditOps(site(), [
+      { op: 'setBackground', page: 'page-home', block: 'block-gone', color: '#0D212E' },
+    ])
+
+    expect(applied).toBe(0)
+    expect(skipped[0]).toContain('no block')
+  })
+
+  it('carries the current colour in the outline, and nothing when there is none', () => {
+    const tinted = applyEditOps(site(), [
+      { op: 'setBackground', page: 'page-home', block: 'block-hero', color: '#0D212E' },
+    ]).config
+
+    const outline = buildOutline(tinted)
+    const blocks = outline.pages[0].blocks
+
+    expect(blocks.find((b) => b.id === 'block-hero')?.background).toBe('#0D212E')
+    expect(blocks.find((b) => b.id === 'block-nav')?.background).toBeUndefined()
+  })
+
+  it('accepts a background on an inserted block', () => {
+    const { config } = applyEditOps(site(), [
+      {
+        op: 'insert',
+        page: 'page-home',
+        index: 1,
+        type: 'cta',
+        props: { headline: 'Réservez' },
+        background: { color: '#0D212E' },
+      },
+    ])
+
+    expect(config.pages![0].blocks[1].background).toEqual({ color: '#0D212E' })
+  })
+})

@@ -25,6 +25,8 @@ Only the pages whose blocks are listed can be edited. A page with an empty "bloc
   Set one prop on one block. "path" supports dots and indices: "headline", "items.0.title", "items.2.features.1".
 - {"op":"setVariant","page":"<pageId>","block":"<blockId>","variant":"<variant>"}
   Switch a block to another of its variants.
+- {"op":"setBackground","page":"<pageId>","block":"<blockId>","color":"#RRGGBB","tone":"auto"|"light"|"dark"}
+  Give one section its own background colour. "tone" is optional and defaults to "auto", which picks light or dark text from the colour's luminance. Send "color":null to put the section back on the page background. The text, card and border colours of that section are derived automatically — never try to set them with "set".
 - {"op":"setTheme","prop":"<themeKey>","value":<any>}
   Theme keys: bg0..bg5, text0..text3, accent, accentDim, borderDefault, borderSubtle, borderHover, fontSans, fontDisplay, fontMono, radius, radiusLg.
 - {"op":"setName","value":"<site name>"}
@@ -52,6 +54,8 @@ ${BLOCK_CATALOGUE}
 8. A block inserted without content is a bug. Fill the props that make it render: an faq needs "items" with question/answer pairs, features needs "items", a cta needs "headline".
 9. Changing "accent" without "accentDim" leaves buttons with a mismatched hover. Send both unless the instruction names only one and the user will set the other.
 10. Never send an op that restates a value the outline already shows. The outline carries the current theme and page names; only send setTheme or setPage when the value actually changes.
+11. A block in the outline may carry "background": its current section colour. Use setBackground only when the instruction asks for a different one, and pick a colour that keeps the site's palette coherent — a dark band between two light sections, not a random hue.
+12. A section background is a colour, not a theme change. Do not send setTheme bg0..bg5 to tint one section: that repaints the whole site.
 
 ## Examples
 
@@ -72,7 +76,7 @@ export interface EditOutline {
     id: string
     name: string
     path: string
-    blocks: { id: string; type: string; variant: string; text?: string }[]
+    blocks: { id: string; type: string; variant: string; text?: string; background?: string }[]
   }[]
 }
 

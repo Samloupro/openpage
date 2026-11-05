@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, Code } from 'lucide-react'
 import type { BlockConfig, BlockType } from '@/blocks/types'
 import { useConfigStore } from '@/store/configStore'
+import { resolveTheme } from '@/lib/theme-presets'
 
 interface FieldDef {
   key: string
@@ -499,6 +500,96 @@ function PropertyField({ field, block }: { field: FieldDef; block: BlockConfig }
   }
 }
 
+/**
+ * A section background is one colour plus a tone. Everything else — text,
+ * cards, borders — is derived, so there is nothing else to set here.
+ */
+function BackgroundSection({ block }: { block: BlockConfig }) {
+  const updateBlock = useConfigStore((s) => s.updateBlock)
+  const theme = useConfigStore((s) => s.config.theme)
+  const resolved = useMemo(() => resolveTheme(theme), [theme])
+
+  const background = block.background
+  const swatches = [resolved.bg0, resolved.bg1, resolved.bg2, resolved.bg3, resolved.bg4, resolved.bg5, resolved.accent]
+
+  const setColor = (color: string) =>
+    updateBlock(block.id, { background: { color, tone: background?.tone ?? 'auto' } })
+
+  return (
+    <Section title="Appearance">
+      <div className="mb-2.5">
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="text-[11.5px] text-text-2 font-medium">Section background</label>
+          {background && (
+            <button
+              onClick={() => updateBlock(block.id, { background: undefined })}
+              className="text-[10px] text-text-3 hover:text-status-red transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {swatches.map((color, i) => (
+            <button
+              key={`${color}-${i}`}
+              onClick={() => setColor(color)}
+              title={color}
+              aria-label={`Use ${color} as section background`}
+              className={`w-6 h-6 rounded border transition-transform hover:scale-110 ${
+                background?.color?.toLowerCase() === color.toLowerCase()
+                  ? 'border-green ring-1 ring-green'
+                  : 'border-border-default'
+              }`}
+              style={{ backgroundColor: color }}
+            />
+          ))}
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <input
+            type="color"
+            value={background?.color ?? resolved.bg0}
+            onChange={(e) => setColor(e.target.value.toUpperCase())}
+            aria-label="Section background colour"
+            className="w-7 h-7 rounded border border-border-default bg-bg-2 cursor-pointer p-0.5"
+          />
+          <input
+            type="text"
+            value={background?.color ?? ''}
+            placeholder="none"
+            onChange={(e) => {
+              const value = e.target.value.trim()
+              if (/^#[0-9a-f]{6}$/i.test(value)) setColor(value.toUpperCase())
+            }}
+            className="flex-1 px-2 py-1.5 rounded border border-border-default bg-bg-2 text-text-0 text-xs font-mono outline-none focus:border-green"
+          />
+        </div>
+      </div>
+
+      {background && (
+        <div>
+          <label className="block text-[11.5px] text-text-2 mb-1 font-medium">Text tone</label>
+          <select
+            value={background.tone ?? 'auto'}
+            onChange={(e) =>
+              updateBlock(block.id, {
+                background: { color: background.color, tone: e.target.value as 'auto' | 'light' | 'dark' },
+              })
+            }
+            className="w-full px-2 py-1.5 rounded border border-border-default bg-bg-2 text-text-0 text-xs outline-none focus:border-green cursor-pointer"
+          >
+            <option value="auto">Auto (from the colour)</option>
+            <option value="light">Light text</option>
+            <option value="dark">Dark text</option>
+          </select>
+        </div>
+      )}
+    </Section>
+  )
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(true)
   return (
@@ -544,6 +635,8 @@ export function PropertiesPanel({ block }: { block: BlockConfig }) {
         </div>
       )}
 
+      <BackgroundSection block={block} />
+
       {/* View JSON toggle */}
       <div className="border-t border-border-subtle">
         <button
@@ -555,7 +648,7 @@ export function PropertiesPanel({ block }: { block: BlockConfig }) {
         </button>
         {showJson && (
           <pre className="px-3.5 pb-3 text-[10px] font-mono text-text-2 leading-relaxed overflow-x-auto max-h-48 overflow-y-auto">
-            {JSON.stringify({ id: block.id, type: block.type, variant: block.variant, props: block.props }, null, 2)}
+            {JSON.stringify({ id: block.id, type: block.type, variant: block.variant, props: block.props, ...(block.background ? { background: block.background } : {}) }, null, 2)}
           </pre>
         )}
       </div>

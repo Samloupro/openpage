@@ -1,5 +1,6 @@
 import type { SiteConfig, BlockConfig } from '@/blocks/types'
 import { resolveTheme } from '@/lib/theme-presets'
+import { buildToneLayer } from '@/lib/section-tone'
 
 export interface ExportSiteSettings {
   siteName?: string
@@ -1284,7 +1285,17 @@ ${html}
 // Block dispatcher
 // ---------------------------------------------------------------------------
 
-function renderBlock(block: BlockConfig): string {
+function renderBlock(block: BlockConfig, toneId?: string): string {
+  const html = renderBlockBody(block)
+  if (!toneId) return html
+  // The wrapper carries the section background. The `div` also gives the tone
+  // rules their specificity edge over Tailwind's hover utilities.
+  return `  <div data-op-tone="${toneId}">
+${html}
+  </div>`
+}
+
+function renderBlockBody(block: BlockConfig): string {
   switch (block.type) {
     case 'navbar':
       return renderNavbar(block)
@@ -1332,7 +1343,10 @@ export function exportSiteToHTML(config: SiteConfig, options?: ExportSiteOptions
   const hasFaq = config.blocks.some((b) => b.type === 'faq')
   const hasNavbar = config.blocks.some((b) => b.type === 'navbar')
 
-  const blocksHtml = config.blocks.map((b) => renderBlock(b)).join('\n\n')
+  const toneLayer = buildToneLayer(config.blocks, theme.accent)
+  const blocksHtml = config.blocks
+    .map((b) => renderBlock(b, toneLayer.toneByBlock.get(b.id)))
+    .join('\n\n')
 
   const pageTitle = (settings?.seoTitle || settings?.siteName || config.name || 'Website').trim()
   const pageDescription = (settings?.seoDescription || settings?.siteDescription || '').trim()
@@ -1528,7 +1542,7 @@ ${ogDescriptionMeta}${ogImageMeta}${faviconLink}
     .faq-chevron {
       transition: transform 0.2s ease;
     }
-  </style>
+${toneLayer.css ? `\n    /* Section backgrounds: one block per distinct palette */\n    ${toneLayer.css}\n` : ''}  </style>
 ${gaScript}
 ${posthogScript}
 </head>

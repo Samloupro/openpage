@@ -52,6 +52,8 @@ Return a JSON object matching this exact schema:
 
 Each page has its own blocks array. Generate at least 2 pages: Home and one additional page (About, Pricing, or Features depending on the site type). The top-level "blocks" array should be empty (blocks live inside pages).
 
+A block may carry an optional "background": { "color": "#RRGGBB", "tone": "auto" }. It gives that one section its own background colour; the text, card and border colours of the section are derived from it automatically, so never try to set them. Omit it and the section sits on the page background.
+
 ## Available Block Types
 
 ${BLOCK_CATALOGUE}
@@ -68,5 +70,6 @@ ${BLOCK_CATALOGUE}
 8. Each page needs a unique id (page-home, page-about, etc.), a name, and a path (/, /about, etc.)
 9. Omit optional props (marked with ?) unless they genuinely improve the page. Anything you omit is filled with a sensible default — never repeat a default value.
 10. Keep copy tight: one sentence per description, no filler, no restating the headline in the subtitle.
+11. Section backgrounds are optional and should be rare: at most two per page, used to separate a band (a dark CTA, a tinted proof section). Never give two adjacent sections the same background, and never give the navbar or the footer one — they belong to the page.
 
 Return ONLY valid JSON. No markdown, no code fences, no explanation.`

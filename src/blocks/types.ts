@@ -21,11 +21,22 @@ export type BlockType =
 
 export type BlockVariant = string
 
+/**
+ * A section that does not sit on the page background. Only the colour is
+ * stored: the text, card and border colours are derived from it at render
+ * time, so changing the colour can never leave a stale palette behind.
+ */
+export interface SectionBackground {
+  color: string
+  tone?: 'auto' | 'light' | 'dark'
+}
+
 export interface BlockConfig {
   id: string
   type: BlockType
   variant: BlockVariant
   props: Record<string, unknown>
+  background?: SectionBackground
 }
 
 export interface ThemeConfig {

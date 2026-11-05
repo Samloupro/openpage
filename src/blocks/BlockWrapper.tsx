@@ -1,9 +1,10 @@
-import { type ReactNode, useRef, useEffect } from 'react'
+import { type ReactNode, useRef, useEffect, useMemo } from 'react'
 import { Copy, Trash2, ChevronUp, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { useConfigStore } from '@/store/configStore'
 import { useEditorStore } from '@/store/editorStore'
 import { useScrollReveal } from '@/lib/useScrollReveal'
+import { paletteToCSSVars, resolveSectionPalette } from '@/lib/section-tone'
 import type { BlockConfig } from './types'
 
 interface Props {
@@ -23,8 +24,22 @@ export function BlockWrapper({ block, isSelected, onSelect, children }: Props) {
   const { duplicateBlock, removeBlock, moveBlock } = useConfigStore()
   const { selectedBlockId, selectBlock } = useEditorStore()
   const previewMode = useEditorStore((s) => s.previewMode)
+  const accent = useConfigStore((s) => s.config.theme?.accent)
   const scrollRef = useRef<HTMLDivElement>(null)
   const { ref: revealRef, isRevealed } = useScrollReveal(!previewMode)
+
+  // The editor compiles Tailwind against CSS variables, so the section palette
+  // is applied by overriding them on the wrapper — no extra stylesheet.
+  const sectionStyle = useMemo(() => {
+    if (!block.background) return undefined
+    const palette = resolveSectionPalette(block.background.color, block.background.tone, accent)
+    if (!palette) return undefined
+    return {
+      ...paletteToCSSVars(palette),
+      backgroundColor: palette.bg,
+      color: palette.text0,
+    } as React.CSSProperties
+  }, [block.background, accent])
 
   const index = blocks.findIndex((b) => b.id === block.id)
   const isFirst = index === 0
@@ -41,6 +56,7 @@ export function BlockWrapper({ block, isSelected, onSelect, children }: Props) {
       <div
         ref={revealRef}
         className={isRevealed ? 'scroll-revealed' : ''}
+        style={sectionStyle}
       >
         {children}
       </div>
@@ -143,7 +159,7 @@ export function BlockWrapper({ block, isSelected, onSelect, children }: Props) {
         </button>
       </div>
 
-      {children}
+      {sectionStyle ? <div style={sectionStyle}>{children}</div> : children}
     </div>
   )
 }

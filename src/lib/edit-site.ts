@@ -14,7 +14,7 @@
 
 import type { BlockConfig, PageConfig, SiteConfig, ThemeConfig } from '@/blocks/types'
 import { blockMetadata } from '@/lib/block-metadata'
-import { normalizeProps } from '@/lib/generate-site'
+import { normalizeBackground, normalizeProps } from '@/lib/generate-site'
 import { preferredModel } from '@/lib/llm-client'
 
 const BLOCK_TYPES = new Set<string>(blockMetadata.map((block) => block.type))
@@ -28,6 +28,13 @@ const PREVIEW_LENGTH = 56
 export type EditOp =
   | { op: 'set'; page?: string; block: string; prop: string; value: unknown }
   | { op: 'setVariant'; page?: string; block: string; variant: string }
+  | {
+      op: 'setBackground'
+      page?: string
+      block: string
+      color?: string | null
+      tone?: 'auto' | 'light' | 'dark'
+    }
   | { op: 'setTheme'; prop: string; value: unknown }
   | { op: 'setName'; value: string }
   | { op: 'setPage'; page: string; prop: 'name' | 'path'; value: string }
@@ -38,6 +45,7 @@ export type EditOp =
       type: string
       variant?: string
       props?: Record<string, unknown>
+      background?: { color: string; tone?: 'auto' | 'light' | 'dark' }
     }
   | { op: 'remove'; page?: string; block: string }
   | { op: 'move'; page?: string; from: number; to: number }
@@ -49,7 +57,7 @@ export interface EditOutline {
     id: string
     name: string
     path: string
-    blocks: { id: string; type: string; variant: string; text?: string }[]
+    blocks: { id: string; type: string; variant: string; text?: string; background?: string }[]
   }[]
 }
 
@@ -164,6 +172,7 @@ export function buildOutline(
             type: block.type,
             variant: block.variant,
             ...(text ? { text } : {}),
+            ...(block.background ? { background: block.background.color } : {}),
           }
         }),
       }
@@ -247,12 +256,17 @@ function makeBlock(op: Extract<EditOp, { op: 'insert' }>, position: number): Blo
 
   const props = { ...(DEFAULT_PROPS[op.type] ?? {}), ...(op.props ?? {}) }
 
-  return {
+  const block: BlockConfig = {
     id: `block-${op.type}-${position}-${Date.now().toString(36)}`,
     type: op.type as BlockConfig['type'],
     variant,
     props: normalizeProps(op.type, props),
   }
+
+  const background = normalizeBackground(op.background)
+  if (background) block.background = background
+
+  return block
 }
 
 /**
@@ -301,6 +315,31 @@ export function applyEditOps(config: SiteConfig, ops: unknown[]): ApplyResult {
         continue
       }
       block.variant = variant
+      applied += 1
+      continue
+    }
+
+    if (kind === 'setBackground') {
+      const page = resolvePage(pages, op.page as string | undefined)
+      const block = page?.blocks.find((b) => b.id === op.block)
+      if (!block) {
+        skipped.push(`setBackground: no block ${String(op.block)}`)
+        continue
+      }
+
+      const color = op.color
+      if (color === null || color === undefined || color === '' || color === 'none') {
+        delete block.background
+        applied += 1
+        continue
+      }
+
+      const background = normalizeBackground({ color, tone: op.tone })
+      if (!background) {
+        skipped.push(`setBackground: bad colour ${String(color)}`)
+        continue
+      }
+      block.background = background
       applied += 1
       continue
     }

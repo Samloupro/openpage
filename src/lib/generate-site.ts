@@ -1,4 +1,4 @@
-import type { SiteConfig, BlockConfig, ThemeConfig } from '@/blocks/types'
+import type { SiteConfig, BlockConfig, SectionBackground, ThemeConfig } from '@/blocks/types'
 import { blockMetadata } from '@/lib/block-metadata'
 import { GENERATION_PROMPT } from '@/lib/generation-prompt'
 import { getTemplateForPrompt } from '@/lib/templates'
@@ -156,12 +156,38 @@ function validateBlock(raw: Record<string, unknown>, index: number): BlockConfig
   const defaultProps = DEFAULT_PROPS_MAP[type] || {}
   const props = typeof raw.props === 'object' && raw.props ? { ...defaultProps, ...raw.props } : defaultProps
 
-  return {
+  const block: BlockConfig = {
     id: typeof raw.id === 'string' && raw.id ? raw.id : `block-${type}-${index}-${Date.now()}`,
     type: type as BlockConfig['type'],
     variant,
     props: normalizeProps(type, props as Record<string, unknown>),
   }
+
+  const background = normalizeBackground(raw.background)
+  if (background) block.background = background
+
+  return block
+}
+
+/**
+ * A model that answers `background: "#0D212E"` or `background: { color: "navy" }`
+ * must not reach the renderer. Only a six-digit hex survives, and the tone is
+ * one of three words.
+ */
+export function normalizeBackground(value: unknown): SectionBackground | undefined {
+  if (typeof value === 'string') {
+    return /^#[0-9a-f]{6}$/i.test(value.trim()) ? { color: value.trim().toUpperCase() } : undefined
+  }
+  if (!value || typeof value !== 'object') return undefined
+
+  const record = value as Record<string, unknown>
+  const color = typeof record.color === 'string' ? record.color.trim() : ''
+  if (!/^#[0-9a-f]{6}$/i.test(color)) return undefined
+
+  const tone = record.tone
+  const normalized: SectionBackground = { color: color.toUpperCase() }
+  if (tone === 'light' || tone === 'dark' || tone === 'auto') normalized.tone = tone
+  return normalized
 }
 
 /**
